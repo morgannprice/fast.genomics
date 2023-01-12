@@ -10,7 +10,7 @@ use FetchAssembly qw{ParseNCBIFeatureFile};
 use pbutils qw{ReadFastaEntry ReadTable};
 
 my $usage = <<END
-build.pl -genomes genomes.tsv -fetched assemblies.tsv -dir dir
+build.pl -genomes genomes.tsv -fetched assemblies.tsv -dir dir -test
 
 Creates the neighbor database, including the mysql database
 (neighbor.db), a big fasta file (neighbor.faa), and an mmseqs index
@@ -23,6 +23,8 @@ Optional arguments:
 -out dir -- where to put the output files
 -tmp dir/tmp -- the temporary directory for mmseqs
 -mmseqs mmseqs_executable -- by default, assumes mmseqs is on the path
+-test -- test mode: build tab-delimited tables and faa file, but
+   do not delete them or build the mmseqs or sqlite3 databases.
 END
 ;
 
@@ -30,7 +32,7 @@ END
 # So, need to replace any " with "" and surround the field with quotes.
 sub csv_quote($);
 
-my ($genomeFile, $fetchedFile, $inDir, $outDir, $tmpDir);
+my ($genomeFile, $fetchedFile, $inDir, $outDir, $tmpDir, $test);
 my $mmseqs = "mmseqs";
 die $usage
   unless GetOptions('genomes=s' => \$genomeFile,
@@ -38,7 +40,8 @@ die $usage
                     'dir=s' => \$inDir,
                     'out=s' => \$outDir,
                     'tmp=s' => \$tmpDir,
-                    'mmseqs=s' => \$mmseqs)
+                    'mmseqs=s' => \$mmseqs,
+                    'test' => \$test)
   && defined $genomeFile
   && defined $fetchedFile
   && defined $inDir
@@ -68,12 +71,14 @@ die "No genomes to load\n" if @genomes == 0;
 
 my $dbFile = "$outDir/neighbor.db";
 my $mmDb = "$outDir/neighbor.mmseqs";
-unlink($dbFile);
-unlink($mmDb);
-
-my $sqlFile = "$RealBin/../lib/neighbor.sql";
-system("sqlite3 $dbFile < $sqlFile") == 0 || die $!;
-print STDERR "Created empty database $dbFile; reading genomes.\n";
+if (!defined $test) {
+  unlink($dbFile);
+  unlink($mmDb);
+  my $sqlFile = "$RealBin/../lib/neighbor.sql";
+  system("sqlite3 $dbFile < $sqlFile") == 0 || die $!;
+  print STDERR "Created empty database $dbFile\n";
+}
+print STDERR "Reading genomes\n";
 
 # As we read the genomes, write to the tables
 my @tables = qw{Genome Gene Protein Taxon};
@@ -119,22 +124,51 @@ foreach my $row (@genomes) {
   }
   close($fhIn) || die "Error reading $faaIn";
 
-  # Read the feature file as pairs of rows -- first a gene entry, then a CDS (even if a pseudogene)
-  # or rRNA or ncRNA type entry, which will have the description under "name".
-  while(@$features > 0) {
-    my $gene = shift @$features;
-    die "Error parsing feature table $featureFile" unless $gene->{"# feature"} eq "gene";
-    my $second = shift @$features;
-    die "Error parsing feature table $featureFile" 
-      unless defined $second && $second->{"# feature"} ne "gene";
+  # The feature file usually has pairs of rows, first a gene entry, then usually a CDS
+  # (even if a pseudogene), or rRNA or ncRNA type entry, which will have the description under "name".
+  # But sometimes the rows are not in order (i.e., two rows for an antisense RNA between
+  # the gene and CDS entries, see BSU_32469 in GCF_000009045.1). Or sometimes
+  # there's no CDS entry at all.
+  # So first, group the entries by locus_tag.
+  my %locusTagFeatures = ();
+  foreach my $feature (@$features) {
+    push @{ $locusTagFeatures{ $feature->{locus_tag} } }, $feature;
+  }
+  my $nGenes = 0;
+  my $nGenesWithProteins = 0;
+  foreach my $locus_tag (sort keys %locusTagFeatures) {
+    if ($locus_tag eq "") {
+      print STDERR "Warning: row(s) with empty locus_tag in $featureFile\n";
+      next;
+    }
+    my $list = $locusTagFeatures{$locus_tag};
+    my @genes = grep $_->{"# feature"} eq "gene", @$list;
+    my @others = grep $_->{"# feature"} ne "gene", @$list;
+    if (@genes == 0) {
+      print STDERR "Warning: no gene entry for locus_tag $locus_tag in $featureFile\n";
+      next;
+    }
+    print STDERR "Warning: more than one gene entry for locus_tag $locus_tag in $featureFile\n"
+      if @genes > 1;
+    print STDERR "Warning: more than one non-gene entry for locus_tag $locus_tag in $featureFile\n"
+      if @others > 1;
+    my $gene = $genes[0];
+    my $other = $others[0]; # or undef
 
     my $locusTag = $gene->{"locus_tag"};
     my $proteinId = "";
-    my $desc = $second->{name};
-    $desc = $desc . " (pseudogene)" if $second->{class} eq "without_protein";
-
-    if ($gene->{class} eq "protein_coding" && $second->{class} eq "with_protein") {
-      $proteinId = $second->{"product_accession"};
+    my $desc = "?";
+    if (defined $other) {
+      $desc = $other->{name};
+      $desc = $desc . " (pseudogene)" if $other->{class} eq "without_protein";
+    } else {
+      $desc = "pseudogene" if $gene->{attributes} =~ m/pseudo/i;
+    }
+    # The CDS may have class="with_protein" or empty
+    if ($gene->{class} eq "protein_coding" && defined $other
+        && $other->{"# feature"} eq "CDS"
+        && ($other->{class} eq "with_protein" || $other->{class} eq "")) {
+      $proteinId = $other->{"product_accession"};
       if (!exists $protSeen{$proteinId}) {
         print STDERR "Warning: unknown protein id $proteinId in $featureFile for $locusTag\n";
         $proteinId = "";
@@ -145,8 +179,12 @@ foreach my $row (@genomes) {
     print { $fh{Gene} } join("\t", $gid,
                              $gene->{genomic_accession}, $gene->{start}, $gene->{end}, $gene->{strand},
                              $locusTag, $proteinId, csv_quote($desc)) . "\n";
-
+    $nGenes++;
+    $nGenesWithProteins++ if $proteinId ne "";
   }
+  print STDERR "Warning: $gid has $nGenes genes but only $nGenesWithProteins with protein sequences !\n"
+    if $nGenesWithProteins <= $nGenes/2.0;
+
   # Fields in the Genome table are gid
   # gtdbDomain Phylum Class Order Family Genus Species
   # strain gtdbAccession assemblyName ncbiTaxonomy
@@ -190,6 +228,10 @@ foreach my $table (@tables) {
 }
 
 print STDERR "Read all genomes and built neighbor.faa and tables for loading\n";
+if (defined $test) {
+  print STDERR "Finished with test mode\n";
+  exit(0);
+}
 
 open(SQLITE, "|-", "sqlite3", "$dbFile") || die "Cannot run sqlite3 on $dbFile";
 autoflush SQLITE 1;
