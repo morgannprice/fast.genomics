@@ -43,10 +43,11 @@ CREATE TABLE Protein (
 );
 
 CREATE TABLE Taxon (
-  taxon TEXT PRIMARY KEY,
+  taxon TEXT NOT NULL,
   level TEXT NOT NULL,
   parent TEXT NOT NULL,
-  nGenomes INT NOT NULL
+  nGenomes INT NOT NULL,
+  PRIMARY KEY (taxon,level)
 );
 CREATE INDEX TaxonLevel ON Taxon (level, taxon);
 CREATE INDEX TaxonParent ON Taxon (parent);
