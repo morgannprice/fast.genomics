@@ -15,12 +15,10 @@ END
 
 my $hits = parseLast(\*STDIN);
 foreach my $hit (@$hits) {
-  foreach my $field (qw{query subject identity nMismatch nGapOpen qBegin qEnd sBegin sEnd evalue bits}) {
-    die "No value for $field in hit" unless defined $hit->{$field};
-  }
-  # BLAST and usearch round identity and bits to 1 decimal point, so do the same
+  # BLAST rounds identity to 2 and bits to 1 decimal point, so do the same
   print join("\t", $hit->{query}, $hit->{subject},
-             sprintf("%.1f",$hit->{identity}), $hit->{nMismatch}, $hit->{nGapOpen},
+             sprintf("%.2f",$hit->{identity}), $hit->{alnLength},
+             $hit->{nMismatch}, $hit->{nGapOpen},
              $hit->{qBegin}, $hit->{qEnd}, $hit->{sBegin}, $hit->{sEnd},
              $hit->{evalue}, sprintf("%.1f", $hit->{bits}))."\n";
 }

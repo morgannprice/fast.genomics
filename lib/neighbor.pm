@@ -84,10 +84,11 @@ sub parseLast($) {
             $nMatch++;
           } elsif ($qPos[$i] ne "-" && $sPos[$i] ne "-") {
             $nMismatch++;
+          } elsif ($qPos[$i] eq "-" || $sPos[$i] eq "-") {
             $nGapOpen++ if $i == 0 || ($qPos[$i-1] ne "-" && $sPos[$i-1] ne "-");
           }
         }
-        my $identity = 100 * $nMatch/($nMatch + $nMismatch);
+        my $identity = 100 * $nMatch/length($qAln);
         my $out = { 'query' => $query, 'qLength' => $qLength, 'qBegin' => $qBegin, 'qEnd' => $qEnd,
                     'subject' => $subject, 'sLength' => $sLength, 'sBegin' => $sBegin, 'sEnd' => $sEnd,
                     'score' => $score, 'evalue' => $evalue, 'bits' => $bits, 'EG2' => $EG2,
