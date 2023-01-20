@@ -1,0 +1,42 @@
+Requirements for setting up the web site:
+
+Various perl libraries, as described in the PaperBLAST code base. This
+includes CGI and BioPerl.
+
+sqlite3 must be installed
+
+bin/ cgi/ lib/ should match the code repository
+
+The bin/mmseqs executable must exist.
+
+The tmp/cache/ and tmp/hits/ subdirectories
+should exist and be writable by the web server.
+
+The PaperBLAST code base must be installed in the parent directory --
+i.e., if the cgi scripts are in parent/neighbor/cgi
+
+then the PaperBLAST libraries must be in parent/PaperBLAST/lib
+
+The data/ subdirectory should include neighbor.db and neighbor.mmseqs*
+(created by the bin/build.pl script). It should also include a
+data/tmp subdirectory that is writable by the web server.
+
+Optional, for performance: use
+them into data/, use
+  mmseqs touchdb data/neighbor.mmseqs
+to make sure that mmseq's index is in memory.
+
+The bin directory must include the mmseqs2 executable (named mmseqs)
+
+To fetch identifiers from the fitness browser, neighbor/fbrowse_data
+must include the fitness browser database (both sqlite and
+blast). This will also require that the bin/blast directory include
+the executable fastacmd. We used blast 2.2.18.
+
+Optionally, use the motd file to show a "message of the data" at the
+top of the main page and some other pages.
+
+For querying NCBI, it is recommended to put an NCBI API key in
+private/.NCBI.api_key as a single line. For documentation about NCBI's
+API keys see
+https://ncbiinsights.ncbi.nlm.nih.gov/2017/11/02/new-api-keys-for-the-e-utilities/
