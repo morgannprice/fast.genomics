@@ -253,8 +253,7 @@ close(SQLITE) || die "Error running sqlite3 import commands\n";
 
 print STDERR "Creating and indexing mmseqs database, see $outDir/mmseqs.log\n";
 my @mmCmds = ("mmseqs createdb $faaOut $mmDb",
-              "mmseqs createindex $mmDb $tmpDir",
-              "mmseqs touchdb $mmDb");
+              "mmseqs createindex $mmDb $tmpDir");
 system("(" . join("; ", @mmCmds) . ") >& $outDir/mmseqs.log") == 0
   || die "Error running mmseqs: $!\n";
 print STDERR "Finished building:\nsqlite3\t$dbFile\nmmseqs2\t$mmDb\n";
