@@ -5,11 +5,10 @@ use CGI::Carp qw(warningsToBrowser fatalsToBrowser);
 use IO::Handle; # for autoflush
 use DBI;
 use HTML::Entities;
-use URI::Escape;
-# neighbor.pm relies on various PaperBLAST libraries
-use lib "../../PaperBLAST/lib";
 use lib "../lib";
 use neighbor;
+# neighborWeb.pm relies on various PaperBLAST libraries
+use lib "../../PaperBLAST/lib";
 use neighborWeb;
 
 # CGI arguments:
@@ -19,7 +18,21 @@ use neighborWeb;
 my $cgi = CGI->new;
 my $query = $cgi->param('query') || "";
 
-start_page('title' => "Gene search");
+# Redirect to locus tag if the query is an exact match to a
+# locus tag or proteinId in our database
+my $geneRedirect = locusTagToGene($query); # checks upper case as well
+if (! $geneRedirect && $query =~ m/^[a-zA-Z0-9_.]+$/) {
+  my $genesFromProteinId = getDbHandle()->selectall_arrayref(
+    qq{ SELECT * from Gene WHERE proteinId = ? },
+    { Slice => {} }, uc($query));
+  $geneRedirect = $genesFromProteinId->[0] if @$genesFromProteinId == 1;
+}
+if ($geneRedirect) {
+  print redirect(-url => "gene.cgi?locus=" . $geneRedirect->{locusTag});
+  exit(0);
+}
+
+start_page('title' => $query eq "" ? "" : "Gene search");
 autoflush STDOUT 1; # show preliminary results
 
 my %query = parseGeneQuery($query);
@@ -48,7 +61,9 @@ if (defined $query{genes}) {
   die $gid unless $genome;
   print p("Found", scalar(@$genes), " matches in $genome->{gtdbSpecies} $genome->{strain} ($genome->{gid})");
   foreach my $gene (@$genes) {
-    print p($gene->{locusTag}, $gene->{proteinId}, $gene->{desc});
+    my $locusTag = $gene->{locusTag};
+    print p(a({href => "gene.cgi?locus=$locusTag"}, $locusTag),
+            $gene->{proteinId}, $gene->{desc});
   }
   finish_page();
 }

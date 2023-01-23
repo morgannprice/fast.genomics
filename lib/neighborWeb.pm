@@ -19,7 +19,8 @@ our (@ISA,@EXPORT);
 @ISA = qw(Exporter);
 @EXPORT = qw{getDbHandle parseGeneQuery getMMSeqsHits parseGeneQuery hitsToGenes
              start_page finish_page
-             showSequence};
+             locusTagToGene
+             showSequence formatFastaHtml};
 
 my $dbh = undef;
 sub getDbHandle() {
@@ -84,8 +85,7 @@ sub getMMSeqsHits($) {
 #	and % is the wild card character
 #   or a sequence in fasta format (header line optional) or uniprot format
 # Returns a hash with the fields
-#   gene -- if a single gene in the database was found
-#   genes -- if multiple genes matched
+#   genes -- if gene(s) matched in the database
 #   seq -- if a single gene or known identifier was found
 #   seqDesc -- the description
 #   error -- set if there was an error (and with entities encoded)
@@ -105,21 +105,8 @@ sub parseGeneQuery($) {
   if ($query =~ m/^[a-zA-Z0-9_.-]+$/ && $query =~ m/[0-9_]/) {
     # try to find the identifier
     # first, look in the SQL database
-    my $gene = $dbh->selectrow_hashref("SELECT * FROM Gene WHERE locusTag = ? OR locusTag = ?",
-                                       {}, $query, uc($query));
-    if (defined $gene) {
-      # seq will be undef if not protein-coding
-      my $seq;
-      if ($gene->{proteinId} ne "") {
-        ($seq) = $dbh->selectrow_array("SELECT sequence FROM Protein WHERE proteinId = ?",
-                                       {}, $gene->{proteinId});
-        die "Could not find sequence for protein $gene->{proteinId}"
-          unless $seq;
-      }
-      my $seqDesc = $gene->{locusTag} . " " . $gene->{desc};
-      return ('gene' => $gene, 'seq' => $seq,
-              'seqDesc' => $gene->{locusTag} . " " . $gene->{desc} );
-    }
+    my $gene = locusTagToGene($query);
+    return ('genes' => [$gene]) if defined $gene;
     #else
     # Check MicrobesOnline and fitness browser first because they are fast
     # Check pdb next because it is very specific about which identifiers to look for
@@ -173,31 +160,25 @@ sub parseGeneQuery($) {
     my $wordQuery = join(" ", @parts);
     my $genes = $dbh->selectall_arrayref(qq{ SELECT * FROM Gene
                                            WHERE gid=?
-                                           AND (desc LIKE ? OR desc LIKE ? OR desc LIKE ?)
+                                           AND (desc LIKE ? OR desc LIKE ? OR desc LIKE ? OR desc LIKE ?)
                                            LIMIT 200 },
                                          { Slice => {} },
                                          $genome->{gid},
-                                         "${wordQuery}%", "%-${wordQuery}%", "% ${wordQuery}%");
+                                         "${wordQuery}%", "%-${wordQuery}%",
+                                         "% ${wordQuery}%", "% (${wordQuery}%");
     return ("error" => "Sorry, no genes in $genome->{gtdbSpecies} $genome->{strain} ($genome->{gid}) match "
             . encode_entities($wordQuery))
       if @$genes == 0;
-    if (@$genes == 1) {
-      # return the single gene
-      my $gene = $genes->[0];
-      my $seq;
-      if ($gene->{proteinId} ne "") {
-        ($seq) = $dbh->selectrow_array("SELECT sequence FROM Protein WHERE proteinId = ?",
-                                       {}, $gene->{proteinId});
-        die "Could not find sequence for protein $gene->{proteinId}"
-          unless $seq;
-      }
-      my $seqDesc = $gene->{locusTag} . " " . $gene->{desc};
-      return ('gene' => $gene, 'seq' => $seq,
-              'seqDesc' => $gene->{locusTag} . " " . $gene->{desc} );
-    }
     return ('genes' => $genes);
   }
   return ('error'=> "Sorry, did not understand the query.");
+}
+
+# Case insensitive if the locus tag is all upper case
+sub locusTagToGene($) {
+  my ($locusTag) = @_;
+  return getDbHandle()->selectrow_hashref("SELECT * FROM Gene WHERE locusTag = ? OR locusTag = ?",
+                                          {}, $locusTag, uc($locusTag));
 }
 
 # Convert hits to proteinIds (from readMMSeqsHits) to a list of genes
@@ -228,8 +209,7 @@ sub TopDivHtml($$) {
 <div style="background-color: #40C0CB; display: block; position: absolute; top: 0px; left: -1px;
   width: 100%; padding: 0.25em; z-index: 400;">
 <H2 style="margin: 0em;">
-<A HREF="$URL" style="color: gold; font-family: 'Montserrat', sans-serif; font-style:italic;
-  text-shadow: 1px 1px 1px #000000; text-decoration: none;">
+<A HREF="$URL" style="color: grey90; font-family: 'Montserrat', sans-serif; text-decoration: none;">
 $banner
 </A></H2></div>
 <P style="margin: 0em;">&nbsp;</P>
@@ -239,18 +219,18 @@ END
 
 sub start_page {
   my (%param) = @_;
-  my $title = $param{title} || "FastComper";
+  my $title = $param{title} || "";
   my ($nGenomes) = getDbHandle()->selectrow_array("SELECT COUNT(*) FROM Genome");
-  my $banner = $param{banner} || "FastComper &mdash;"
+  my $banner = $param{banner} || "<i>FastComper</i> &ndash; "
     . qq{<SPAN style="font-size:smaller;"> browse }
-    . commify($nGenomes) . " genera of bacteria and archaea</SPAN>";
+    . commify($nGenomes) . " representative genomes</SPAN>";
   my $bannerURL = $param{bannerURL} || 'search.cgi';
   print
     CGI::header(-charset => 'utf-8'),
     CGI::start_html(-head => CGI::Link({-rel => "shortcut icon", -href => "../static/favicon.ico"}),
-               -title => $title),
+               -title => $title eq "" ? "FastComper" : "FastComper $title"),
     TopDivHtml($banner, $bannerURL),
-    CGI::h2($title),
+    $title ? CGI::h2($title) : "",
     "\n";
 }
 
@@ -289,11 +269,17 @@ END
 
   $out .= CGI::p({ -id => "showSequenceLink", -style => "font-size:90%" },
            CGI::a({ -href => "#", -onclick => "return showQuery()" }, "Show sequence"));
-  my @seqPieces = $seq =~ /.{1,60}/g;
   $out .=  CGI::p({ -id => "querySequence",
-            -style => "font-family: monospace; display:none; font-size:90%; padding-left: 2em;" },
-          join(CGI::br(), ">".encode_entities($seqDesc), @seqPieces));
+                    -style => "font-family: monospace; display:none; font-size:90%; padding-left: 2em;" },
+                  formatFastaHtml($seqDesc, $seq));
   return $out;
+}
+
+sub formatFastaHtml($$) {
+  my ($seqDesc, $seq) = @_;
+  my @seqPieces = $seq =~ /.{1,60}/g;
+  return CGI::span({ -style => "font-family: monospace;" },
+                   join(CGI::br(), ">".encode_entities($seqDesc), @seqPieces));
 }
 
 1;
