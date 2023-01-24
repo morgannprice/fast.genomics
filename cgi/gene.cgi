@@ -7,6 +7,7 @@ use DBI;
 use HTML::Entities;
 use List::Util qw{min max};
 use lib "../lib";
+use genesSvg;
 use neighbor;
 # neighborWeb.pm relies on various PaperBLAST libraries
 use lib "../../PaperBLAST/lib";
@@ -65,38 +66,52 @@ push @lines, "Location: " . $gene->{scaffoldId} . " "
   . " ($gene->{strand})";
 
 print map p({-style => "margin-top: 0.25em; margin-bottom: 0.25em;"}, $_), @lines;
+print "\n";
+
+my $nearbyGenes = getNearbyGenes($gene);
+my $xMid = ($gene->{begin} + $gene->{end})/2;
+my $showBegin  = min($gene->{begin} - 1000, $xMid - 3000);
+my $showEnd  = max($gene->{end} + 1000, $xMid + 3000);
+my @showGenes = grep $_->{end} >= $showBegin && $_->{begin} <= $showEnd, @$nearbyGenes;
+foreach my $s (@showGenes) {
+  $s->{label} = $s->{locusTag};
+  $s->{URL} = "gene.cgi?locus=" . $s->{locusTag};
+  $s->{color} = $s->{locusTag} eq $gene->{locusTag} ? "lightblue" : "lightgrey";
+}
+
+my $trackPadY = 5;
+my %genesSvg = genesSvg(\@showGenes,
+                        'begin' => $showBegin, 'end' => $showEnd,
+                        'yTop' => $trackPadY);
+my $svgHeight = $genesSvg{yMax} + 2 * $trackPadY;
+print join("\n",
+           h3("Gene Neighborhood"),
+           qq[<SVG width="$genesSvg{xMax}" height="$svgHeight"
+                    style="position: relative; left: 1em;>],
+           qq[<g transform="scale(1.0)">],
+           $genesSvg{svg},
+           "</g>",
+           </svg>) . "\n";
+
+#my $iMax = scalar(@$nearbyGenes) - 1;
+#my ($iThis) = grep $nearbyGenes->[$_]{locusTag} eq $gene->{locusTag}, (0..$iMax);
+#die "gene is not near itself" unless defined $iThis;
+#my $i1 = max(0, $iThis-5);
+#my $i2 = min($iThis+5, $iMax);
+#print h3("Nearby Genes");
+#for my $i ($i1..$i2) {
+#  my $nearbyGene = $nearbyGenes->[$i];
+#  my $nlt = $nearbyGene->{locusTag};
+#  print p(a({-href => "gene.cgi?locus=$nlt"}, $nlt), $nearbyGene->{strand}, encode_entities($nearbyGene->{desc}));
+#}
 
 if (defined $seq) {
-  my $newline = "%0A";
-
-  my ($psortType, $psortShow) = ("negative", "Gram-negative bacteria");
-  ($psortType, $psortShow) = ("positive", "Gram-positive bacteria")
-    if $genome->{gtdbPhylum} =~ m/^Firmicutes|Actinobacteriota/;
-  ($psortType, $psortShow) = ("archaea", "archaea")
-    if $genome->{gtdbDomain} eq "Archaea";
 
   print h3("Sequence analysis tools");
-  my @tools =
-    ( a({-href => "http://papers.genomics.lbl.gov/cgi-bin/litSearch.cgi?query=>${locusTag}$newline$seq"},
-        "PaperBLAST") .
-      " (search for papers about homologs of this protein)",
-      a({-href => "http://www.ncbi.nlm.nih.gov/Structure/cdd/wrpsb.cgi?seqinput=>${locusTag}$newline$seq"},
-        "Search the Conserved Domains Database"),
-      a({ -href => "http://www.ebi.ac.uk/thornton-srv/databases/cgi-bin/pdbsum/FindSequence.pl?pasted=$seq",
-          -title => "Find similar proteins with known structures (PDBsum)"},
-      "Search structures"),
-      "Predict protein localization: " .
-      a({-href => "https://papers.genomics.lbl.gov/cgi-bin/psortb.cgi?name=${locusTag}&type=${psortType}&seq=${seq}",
-         -title => "PSORTb v3.0 for $psortShow"},
-        "PSORTb") . " ($psortShow)",
-      "Find homologs in the " .
-      a({-href => "https://iseq.lbl.gov/genomes/seqsearch?sequence=>${locusTag}%0A$seq"},
-      "ENIGMA genome browser")
-      . " (slow)");
-  print map p({-style => "margin-top: 0.25em; margin-bottom: 0.25em;"}, $_), @tools;
-  # I could try to look up the locus tag and the protein id in InterPro
-  # and link to that...
-
+  print start_ul;
+  print join("\n", map li($_), proteinAnalysisLinks($locusTag . " " . $gene->{desc},
+                                                    $seq, $genome));
+  print end_ul;
   print h3("Protein sequence"),
     formatFastaHtml($locusTag . " " . $gene->{desc}, $seq);
 }

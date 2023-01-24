@@ -19,8 +19,8 @@ our (@ISA,@EXPORT);
 @ISA = qw(Exporter);
 @EXPORT = qw{getDbHandle parseGeneQuery getMMSeqsHits parseGeneQuery hitsToGenes
              start_page finish_page
-             locusTagToGene
-             showSequence formatFastaHtml};
+             locusTagToGene getNearbyGenes
+             showSequence formatFastaHtml proteinAnalysisLinks};
 
 my $dbh = undef;
 sub getDbHandle() {
@@ -280,6 +280,48 @@ sub formatFastaHtml($$) {
   my @seqPieces = $seq =~ /.{1,60}/g;
   return CGI::span({ -style => "font-family: monospace;" },
                    join(CGI::br(), ">".encode_entities($seqDesc), @seqPieces));
+}
+
+# Assumes that genes are not too enormous; fetches ~40 kb on each side
+# Returns a reference to a list of rows from the Gene table
+sub getNearbyGenes($) {
+  my ($gene) = @_;
+  my $mid = int( ($gene->{begin} + $gene->{end})/2 );
+  return getDbHandle()->selectall_arrayref(
+    qq[ SELECT * FROM Gene WHERE gid = ? AND scaffoldId = ? AND begin >= ? AND end <= ? ORDER BY begin ],
+    { Slice => {} },
+    $gene->{gid}, $gene->{scaffoldId}, $mid - 40*1000, $mid + 40*1000);
+}
+
+# returns a list of HTML strings
+sub proteinAnalysisLinks($$$) {
+  my ($header, $seq, $genome) = @_;
+  $header = encode_entities($header);
+
+  my ($psortType, $psortShow) = ("negative", "Gram-negative bacteria");
+  ($psortType, $psortShow) = ("positive", "Gram-positive bacteria")
+    if $genome->{gtdbPhylum} =~ m/^Firmicutes|Actinobacteriota/;
+  ($psortType, $psortShow) = ("archaea", "archaea")
+    if $genome->{gtdbDomain} eq "Archaea";
+
+  my $newline = "%0A";
+  return
+    ( CGI::a({-href => "http://papers.genomics.lbl.gov/cgi-bin/litSearch.cgi?query=>${header}$newline$seq"},
+             "PaperBLAST") .
+      " (search for papers about homologs of this protein)",
+      CGI::a({-href => "http://www.ncbi.nlm.nih.gov/Structure/cdd/wrpsb.cgi?seqinput=>${header}$newline$seq"},
+             "Search the Conserved Domains Database"),
+      CGI::a({ -href => "http://www.ebi.ac.uk/thornton-srv/databases/cgi-bin/pdbsum/FindSequence.pl?pasted=$seq",
+               -title => "Find similar proteins with known structures (PDBsum)"},
+             "Search protein structures"),
+      "Predict protein localization: " .
+      CGI::a({-href => "https://papers.genomics.lbl.gov/cgi-bin/psortb.cgi?name=${header}&type=${psortType}&seq=${seq}",
+              -title => "PSORTb v3.0 for $psortShow"},
+        "PSORTb") . " ($psortShow)",
+      "Find homologs in the " .
+      CGI::a({-href => "https://iseq.lbl.gov/genomes/seqsearch?sequence=>${header}$newline$seq"},
+             "ENIGMA genome browser")
+    );
 }
 
 1;
