@@ -34,7 +34,7 @@ CREATE TABLE Gene (
   desc TEXT NOT NULL,
   PRIMARY KEY (gid, scaffoldId, begin, end, strand, locusTag)
 );
-CREATE INDEX 'GeneLocusTag' ON Gene (locusTag);
+CREATE UNIQUE INDEX 'GeneLocusTag' ON Gene (locusTag);
 CREATE INDEX 'GeneProtein' ON Gene (proteinId);
 
 CREATE TABLE Protein (
