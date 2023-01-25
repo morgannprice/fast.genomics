@@ -80,19 +80,20 @@ print "\n";
 
 
 my $nHits = scalar(@$geneHits);
-my $yAt = 25;
+my $yAt = 5;
 my @svgLines = ();
 my $xMax = 500;
 
 foreach my $hit (@$geneHits) {
   my $hitGenome = gidToGenome($hit->{gid}) || die;
   my $genomeURL = encode_entities("https://www.ncbi.nlm.nih.gov/assembly/$hitGenome->{gid}/");
+  $yAt += 15; # make space for genome label
   push @svgLines,
     qq[<a xlink:href="$genomeURL">],
     qq[<text x="0" y="$yAt" font-style="italic">],
-    qq[<title>strain $hitGenome->{strain} ($hitGenome->{gid})</title>],
+    qq[<title>$hitGenome->{gtdbSpecies} strain $hitGenome->{strain} ($hitGenome->{gid})</title>],
     qq[$hitGenome->{gtdbSpecies}</text></a>];
-  $yAt += 5;
+  $yAt += 6;
   my $nearbyGenes = getNearbyGenes($hit);
   my $mid = ($hit->{begin} + $hit->{end})/2;
   my $showBegin = $mid - $ntShown/2;
@@ -110,13 +111,19 @@ foreach my $hit (@$geneHits) {
                           'showLabel' => $hit->{locusTag} eq $geneHits->[0]{locusTag},
                           'invert' => $hit->{strand} eq "-");
   push @svgLines, $genesSvg{svg};
-  $yAt = max($yAt, $genesSvg{yMax}) + 25;
+  $yAt = max($yAt, $genesSvg{yMax}) + 10;
   $xMax = max($xMax, $genesSvg{xMax});
 }
+my %scaleBarSvg = scaleBarSvg('xLeft' => $xMax * 0.8,
+                              'yTop' => $yAt + 5);
+my $svgWidth = max($xMax, $scaleBarSvg{xMax});
+my $svgHeight = $scaleBarSvg{yMax};
+
 print join("\n",
-           qq[<SVG width="$xMax" height="$yAt" style="position: relative; left: 1em;>],
+           qq[<SVG width="$svgWidth" height="$svgHeight" style="position: relative; left: 1em;>],
            qq[<g transform="scale(1.0)">],
            @svgLines,
+           $scaleBarSvg{svg},
            "</g>",
            "</svg>") . "\n";
 

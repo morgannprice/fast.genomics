@@ -7,7 +7,9 @@ use HTML::Entities;
 
 our (@ISA,@EXPORT);
 @ISA = qw(Exporter);
-@EXPORT = qw{genesSvg};
+@EXPORT = qw{genesSvg scaleBarSvg};
+
+my $defaultKbWidth = 150;
 
 # genesSvg() produces the SVG for a track (not an entire SVG object).
 #
@@ -36,7 +38,7 @@ sub genesSvg {
   my $end = $param{end};
   $end = max(map $_->{end}, @$genes) if !defined $end;
   my $yTop = $param{yTop} || 0;
-  my $kbWidth = $param{kbWidth} || 200;
+  my $kbWidth = $param{kbWidth} || $defaultKbWidth;
   my $ntWidth = $kbWidth/1000;
   my $xLeft = $param{xLeft} || 0;
   my $xRight = $xLeft + ($end-$begin) * $ntWidth;
@@ -44,12 +46,11 @@ sub genesSvg {
   my $arrowWidth = $param{arrowWidth} || 15;
   my $geneHeight = $param{geneHeight} || 18;
   my $showLabel = $param{showLabel} || 0;
-  # XXX no scale bar yet
 
   my @svgLines = ();
   my $geneYMid = $yTop + $geneHeight/2;
   push @svgLines,
-    qq[<line x1="$xLeft" y1="$geneYMid" x2="$xRight" y2="$geneYMid" style="stroke:black; stroke-width:1;"/>];
+    qq[<line x1="$xLeft" y1="$geneYMid" x2="$xRight" y2="$geneYMid" style="stroke:darkgrey; stroke-width:1;"/>];
   foreach my $gene (@$genes) {
     my ($x1, $x2, $showStrand);
     if ($invert) {
@@ -61,6 +62,25 @@ sub genesSvg {
       $x2 = $xLeft + ($gene->{end} - $begin) * $ntWidth;
       $showStrand = $gene->{strand};
     }
+    my $truncateLeft = 0;
+    my $truncateRight = 0;
+    if ($x1 < $xLeft) {
+      $x1 = $xLeft;
+      $truncateLeft = 1;
+    }
+    if ($x2 < $xLeft) {
+      $x2 = $xLeft;
+      $truncateLeft = 1;
+    }
+    if ($x1 > $xRight) {
+      $x1 = $xRight;
+      $truncateRight = 1;
+    }
+    if ($x2 > $xRight) {
+      $x2 = $xRight;
+      $truncateRight = 1;
+    }
+
     my $y1 = $yTop;
     my $y2 = $yTop + $geneHeight; # SVG has +y axis going down
     my $geneYMid = ($y1+$y2)/2;
@@ -78,6 +98,7 @@ sub genesSvg {
     my $poly = qq{<polygon points="$pointstr" style="fill:$color; stroke:black; stroke-width:1;" />};
     my $URL = encode_entities( $gene->{URL} || "");
     my $title = encode_entities( join(": ", $gene->{label}, $gene->{desc}) );
+    $title = "(extends beyond this view) $title" if $truncateLeft || $truncateRight;
     push @svgLines, qq{<a xlink:href="$URL">},
       "<title>$title</title>",
       $poly;
@@ -85,7 +106,7 @@ sub genesSvg {
       my $tag = $gene->{label};
       $tag =~ s/^.*_/_/; # shorten so that it is likely to fit
       $tag =~ s/[<>'"]//g;
-      if (abs($xStop-$xStart) >= length($tag) * 9 && $gene->{begin} >= $begin && $gene->{end} <= $end) {
+      if (abs($xStop-$xStart) >= length($tag) * 9) {
         my $xMid = ($xStart+$xStop)/2;
         push @svgLines,
           qq[<text x="$xMid" y="$geneYMid" text-anchor="middle" dominant-baseline="middle" font-size="smaller" >],
@@ -95,5 +116,34 @@ sub genesSvg {
     push @svgLines, "</a>";
   }
   return (svg => join("\n", @svgLines) . "\n",
-          xMax => int(0.5 + $xRight), yMax => int(0.5 + $yTop + $geneHeight));
+          xMax => int(0.99 + $xRight), yMax => int(0.5 + $yTop + $geneHeight));
+}
+
+# input should be a hash that includes yTop
+# and optionally xLeft, kbWidth
+# returns a hash with svg, xMax, and yMax
+sub scaleBarSvg {
+  my (%param) = @_;
+  my $yTop = $param{yTop};
+  die "yTop must be specified" unless defined $yTop;
+  my $xLeft = $param{xLeft} || 0;
+  my $kbWidth = $param{kbWidth} || $defaultKbWidth;
+
+  my $barLeft = $xLeft + 1;
+  my $barRight = $xLeft + $kbWidth;
+  my $barHeight = 10;
+  my $barY = $yTop + 20;
+  my $barTop = $barY - $barHeight/2;
+  my $barBottom = $barY + $barHeight/2;
+
+  my @svgLines = ();
+  push @svgLines, qq[<line x1="$barLeft" x2="$barRight" y1="$barY" y2="$barY" stroke="black" />];
+  push @svgLines, qq[<line x1="$barLeft" x2="$barLeft" y1="$barTop" y2="$barBottom" stroke="black" />];
+  push @svgLines, qq[<line x1="$barRight" x2="$barRight" y1="$barTop" y2="$barBottom" stroke="black" />];
+  my $textLeft = $barRight + 5;
+  push @svgLines, qq[<text x="$textLeft" y="$barBottom" text-anchor="left" dominant-baseline="bottom">1 kb</text>];
+
+  return (svg => join("\n", @svgLines) . "\n",
+          xMax => $textLeft + 4*20,
+          yMax => $barBottom + 5);
 }

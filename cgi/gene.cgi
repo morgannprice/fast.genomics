@@ -54,10 +54,10 @@ if ($gene->{proteinId} ne "") {
     . " (" . length($seq) . " amino acids)";
 }
 my $center = int(($gene->{begin} + $gene->{end})/2);
-my $leftShow = max(1, min($gene->{begin}, $center - 5000));
-my $rightShow = max($gene->{end}, $center + 5000);
+my $showBegin =  max(1, min($gene->{begin} - 1000, $center - 4000));
+my $showEnd = max($gene->{end} + 1000, $center + 4000);
 my $ncbiBrowser = "https://www.ncbi.nlm.nih.gov/nuccore/$gene->{scaffoldId}?report=graph"
-                 . "&from=$leftShow&to=$rightShow";
+                 . "&from=$showBegin&to=$showEnd";
 push @lines, "Location: " . $gene->{scaffoldId} . " "
   . a({-href => $ncbiBrowser, -title => "NCBI browser"},
       $gene->{begin} . ":" . $gene->{end})
@@ -67,9 +67,6 @@ print map p({-style => "margin-top: 0.25em; margin-bottom: 0.25em;"}, $_), @line
 print "\n";
 
 my $nearbyGenes = getNearbyGenes($gene);
-my $xMid = ($gene->{begin} + $gene->{end})/2;
-my $showBegin  = min($gene->{begin} - 1000, $xMid - 3000);
-my $showEnd  = max($gene->{end} + 1000, $xMid + 3000);
 my @showGenes = grep $_->{end} >= $showBegin && $_->{begin} <= $showEnd, @$nearbyGenes;
 foreach my $s (@showGenes) {
   $s->{label} = $s->{locusTag};
@@ -77,18 +74,22 @@ foreach my $s (@showGenes) {
   $s->{color} = $s->{locusTag} eq $gene->{locusTag} ? "lightblue" : "lightgrey";
 }
 
-my $trackPadY = 5;
 my %genesSvg = genesSvg(\@showGenes,
                         'begin' => $showBegin, 'end' => $showEnd,
-                        'yTop' => $trackPadY,
+                        'yTop' => 5,
                         'showLabel' => 1);
-my $svgHeight = $genesSvg{yMax} + 2 * $trackPadY;
+my %scaleBarSvg = scaleBarSvg('xLeft' => $genesSvg{xMax} * 0.8,
+                              'yTop' => $genesSvg{yMax} + 5);
+my $svgWidth = max($genesSvg{xMax}, $scaleBarSvg{xMax});
+my $svgHeight = $scaleBarSvg{yMax};
+
 print join("\n",
            h3("Gene Neighborhood"),
-           qq[<SVG width="$genesSvg{xMax}" height="$svgHeight"
+           qq[<SVG width="$svgWidth" height="$svgHeight"
                     style="position: relative; left: 1em;>],
            qq[<g transform="scale(1.0)">],
            $genesSvg{svg},
+           $scaleBarSvg{svg},
            "</g>",
            </svg>) . "\n";
 
