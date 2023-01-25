@@ -339,10 +339,24 @@ sub proteinAnalysisLinks($$$) {
     if $genome->{gtdbDomain} eq "Archaea";
 
   my $newline = "%0A";
+  my $fitnessBlastJs = <<END
+<SCRIPT src="https://fit.genomics.lbl.gov/d3js/d3.min.js"></SCRIPT>
+<SCRIPT src="https://fit.genomics.lbl.gov/images/fitblast.js"></SCRIPT>
+<SCRIPT>
+var server_root = "https://fit.genomics.lbl.gov/";
+var seq = "$seq";
+fitblast_load_short("fitblast_short", server_root, seq);
+</SCRIPT>
+END
+    ;
   return
     ( CGI::a({-href => "http://papers.genomics.lbl.gov/cgi-bin/litSearch.cgi?query=>${header}$newline$seq"},
              "PaperBLAST") .
       " (search for papers about homologs of this protein)",
+      qq[<A TITLE="Fitness BLAST compares your sequence to bacterial proteins that have mutant phenotypes"
+            NAME="#fitness">Fitness BLAST:</A>
+         <SPAN ID="fitblast_short"><SMALL>loading...</SMALL></SPAN>]
+      . $fitnessBlastJs,
       CGI::a({-href => "http://www.ncbi.nlm.nih.gov/Structure/cdd/wrpsb.cgi?seqinput=>${header}$newline$seq"},
              "Search the Conserved Domains Database"),
       CGI::a({ -href => "http://www.ebi.ac.uk/thornton-srv/databases/cgi-bin/pdbsum/FindSequence.pl?pasted=$seq",

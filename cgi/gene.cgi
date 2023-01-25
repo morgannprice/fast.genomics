@@ -117,13 +117,13 @@ print "\n";
 #}
 
 if (defined $seq) {
-
-  print h3("Sequence analysis tools");
-  print start_ul;
-  print join("\n", map li($_), proteinAnalysisLinks($locusTag . " " . $gene->{desc},
-                                                    $seq, $genome));
-  print end_ul;
-  print h3("Protein sequence"),
+  print
+    h3("Sequence analysis tools"),
+    start_ul,
+    join("\n", map li($_), proteinAnalysisLinks($locusTag . " " . $gene->{desc},
+                                                $seq, $genome));
+    end_ul,
+    h3("Protein sequence"),
     formatFastaHtml($locusTag . " " . $gene->{desc}, $seq);
 }
 

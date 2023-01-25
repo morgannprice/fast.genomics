@@ -14,6 +14,7 @@ use genesSvg;
 # neighborWeb.pm relies on various PaperBLAST libraries
 use lib "../../PaperBLAST/lib";
 use neighborWeb;
+use pbweb qw{commify};
 
 # CGI arguments:
 # locus (a locus tag in the database) or seqDesc and seq
@@ -72,9 +73,9 @@ if (scalar(@$geneHits) == 0) {
   finish_page;
 }
 if (@$geneHits < $n) {
-  print p("Showing all", scalar(@$geneHits), "hits");
+  print p("Showing all", commify(scalar(@$geneHits)), "hits");
 } else {
-  print p("Showing the top $n hits, out of at least", scalar(@$hits));
+  print p("Showing the top $n hits, out of at least", commify(scalar(@$hits)));
 }
 print "\n";
 
@@ -98,11 +99,11 @@ foreach my $hit (@$geneHits) {
   my $domainChar = $hitGenome->{gtdbDomain} eq "Bacteria" ? "B" : "A";
   my $domainColor = $domainChar eq "B" ? "blue" : "green";
   push @svgLines,
-    qq[<text x="0" y="$yAt" font-size="90%"><title>$hitDetails</title>${identity}% id., $hit->{bits} bits</text>],
-    qq[<text x="140" y="$yAt" font-family="bold" font-size="90%" fill=$domainColor>],
+    qq[<text x="0" y="$yAt" font-size="90%"><title>$hitDetails</title>${identity}% id, $hit->{bits} bits</text>],
+    qq[<text x="150" y="$yAt" font-family="bold" font-size="90%" fill=$domainColor>],
     qq[<title>$hitGenome->{gtdbDomain}</title>$domainChar</text>],
     qq[<a xlink:href="$genomeURL">],
-    qq[<text x="155" y="$yAt">],
+    qq[<text x="165" y="$yAt">],
     qq[<title>$hitGenome->{gtdbSpecies} strain $hitGenome->{strain} ($hitGenome->{gid})</title>],
     qq[<tspan font-size="75%"> $hitGenome->{gtdbPhylum} $hitGenome->{gtdbClass} $hitGenome->{gtdbOrder} $hitGenome->{gtdbFamily}</tspan>],
     qq[<tspan font-style="italic" font-size="90%">$hitGenome->{gtdbSpecies}</tspan></text></a>];
