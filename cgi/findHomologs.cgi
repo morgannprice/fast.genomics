@@ -44,10 +44,10 @@ if (@$hitGenes > 0) {
 }
 my %gidHits = map { $_->{gid} => $_ } @$hitGenes;
 my ($nGenomes) = getDbHandle()->selectrow_array("SELECT COUNT(*) FROM Genome");
-print p("Found", scalar(@$hitGenes), "hits in",
-        scalar(keys %gidHits) . " of", commify($nGenomes), "genomes");
+print p("Found", commify(scalar(@$hitGenes)), "hits in",
+        commify(scalar(keys %gidHits)), " of", commify($nGenomes), "genomes");
 print p("Found",
-        scalar(grep $_->{bits} >= $maxScore*0.3, @$hitGenes),
+        commify(scalar(grep $_->{bits} >= $maxScore*0.3, @$hitGenes)),
         "hits with &ge;30% of max score (at least " . sprintf("%.1f",0.3 * $maxScore) . " bits)");
 
 my $options = defined $gene ? "locus=".$gene->{locusTag}
