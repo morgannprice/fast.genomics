@@ -106,13 +106,15 @@ foreach my $hit (@$geneHits) {
   my %genesSvg = genesSvg(\@showGenes,
                           'begin' => $showBegin, 'end' => $showEnd,
                           'yTop' => $yAt,
-                         'invert' => $hit->{strand} ne "+");
+                          # labels only for the top row
+                          'showLabel' => $hit->{locusTag} eq $geneHits->[0]{locusTag},
+                          'invert' => $hit->{strand} eq "-");
   push @svgLines, $genesSvg{svg};
   $yAt = max($yAt, $genesSvg{yMax}) + 25;
   $xMax = max($xMax, $genesSvg{xMax});
 }
 print join("\n",
-           qq[<SVG width=$xMax" height="$yAt" style="position: relative; left: 1em;>],
+           qq[<SVG width="$xMax" height="$yAt" style="position: relative; left: 1em;>],
            qq[<g transform="scale(1.0)">],
            @svgLines,
            "</g>",

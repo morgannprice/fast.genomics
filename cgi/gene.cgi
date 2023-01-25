@@ -80,7 +80,8 @@ foreach my $s (@showGenes) {
 my $trackPadY = 5;
 my %genesSvg = genesSvg(\@showGenes,
                         'begin' => $showBegin, 'end' => $showEnd,
-                        'yTop' => $trackPadY);
+                        'yTop' => $trackPadY,
+                        'showLabel' => 1);
 my $svgHeight = $genesSvg{yMax} + 2 * $trackPadY;
 print join("\n",
            h3("Gene Neighborhood"),
