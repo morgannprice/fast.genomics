@@ -17,10 +17,12 @@ use neighbor;
 
 our (@ISA,@EXPORT);
 @ISA = qw(Exporter);
-@EXPORT = qw{getDbHandle parseGeneQuery getMMSeqsHits parseGeneQuery hitsToGenes
+@EXPORT = qw{getDbHandle parseGeneQuery hasMMSeqsHits getMMSeqsHits parseGeneQuery
+             hitsToGenes hitsToTopGenes
              start_page finish_page
-             locusTagToGene getNearbyGenes
-             showSequence formatFastaHtml proteinAnalysisLinks};
+             locusTagToGene getNearbyGenes gidToGenome
+             showSequence formatFastaHtml proteinAnalysisLinks
+             getGeneSeqDesc};
 
 my $dbh = undef;
 sub getDbHandle() {
@@ -31,22 +33,37 @@ sub getDbHandle() {
   return $dbh;
 }
 
+sub getHitsFile($) {
+  my ($seq)= @_;
+  $seq = uc($seq);
+  die "Invalid sequence for getHitsFile: $seq" unless $seq =~ m/^[A-Z]+$/;
+  my $md5 = md5_hex($seq);
+  return "../tmp/hits/$md5.hits";
+}
+
+sub getMMSeqsDb {
+  return "../data/neighbor.mmseqs";
+}
+
+sub hasMMSeqsHits($) {
+  my ($seq) = @_;
+  return NewerThan(getHitsFile($seq), getMMSeqsDb());
+}
+
 # From a protein sequence to a reference list of hits (each a hash),
 # as parsed by readMMSeqsHits.
 # Caches the results in ../tmp/hits/md5.hits
-# Uses ../data/tmp as the 
+# Uses a temporary subdirectory of ../data/tmp as the temporary directory for mmseqs2
 sub getMMSeqsHits($) {
   my ($seq) = @_;
-  $seq = uc($seq);
-  die "Invalid sequence for getMMSeqsHits: $seq" unless $seq =~ m/^[A-Z]+$/;
-  my $md5 = md5_hex($seq);
-  my $hitsFile = "../tmp/hits/$md5.hits";
-  my $mmseqsDb = "../data/neighbor.mmseqs";
+  my $mmseqsDb = getMMSeqsDb();
+  my $hitsFile = getHitsFile($seq);
   unless (NewerThan($hitsFile, $mmseqsDb)) {
     die "No such file: $mmseqsDb" unless -e $mmseqsDb;
     my $mmseqs = "../bin/mmseqs";
     die "No such executable: $mmseqs" unless -x $mmseqs;
 
+    my $md5 = md5_hex($seq);
     my $faaFile = "../tmp/$md5.$$.faa";
     open(my $fhFaa, ">", $faaFile) || die "Cannot write to $faaFile";
     print $fhFaa ">query\n$seq\n";
@@ -64,7 +81,7 @@ sub getMMSeqsHits($) {
                "--threads", 1,
                "--db-load-mode", 2,
                ">", "$tmpOut.log");
-    print CGI::p("Searching for similar proteins with mmseqs2")."\n";
+    print CGI::p("Searching for similar proteins with mmseqs2..."), "\n";
     system(join(" ",@cmd)) == 0
       || die "Error running @cmd -- $!";
     rename($tmpOut, $hitsFile) || die "Renaming $tmpOut to $hitsFile failed";
@@ -181,6 +198,12 @@ sub locusTagToGene($) {
                                           {}, $locusTag, uc($locusTag));
 }
 
+sub gidToGenome($) {
+  my ($gid) = @_;
+  return getDbHandle()->selectrow_hashref("SELECT * FROM Genome WHERE gid = ?",
+                                          {}, $gid);
+}
+
 # Convert hits to proteinIds (from readMMSeqsHits) to a list of genes
 # Both input and output should be a list of references; the output rows
 # hves all of the fields from the Gene table as well.
@@ -201,6 +224,17 @@ sub hitsToGenes($) {
     }
   }
   return \@hitGenes;
+}
+
+# Like hitsToGenes, but returns a maximum of $n entries
+sub hitsToTopGenes($$) {
+  my ($hits, $n) = @_;
+  return [] unless $n >= 1;
+  my @top = @$hits;
+  $#top = $n-1 if scalar(@top) > $n;
+  my $hitGenes = hitsToGenes(\@top);
+  splice $hitGenes, $n if scalar(@$hitGenes) > $n;
+  return $hitGenes;
 }
 
 sub TopDivHtml($$) {
@@ -324,4 +358,26 @@ sub proteinAnalysisLinks($$$) {
     );
 }
 
+# Given a CGI object, which may specify locus or seq and seqDesc,
+# extract gene, seq, and seqDesc
+# (If a locus tag is specified, seq and seqDesc are from the database, and seq will be undef
+#  if it is not a protein-coding gene)
+#
+sub getGeneSeqDesc($) {
+  my ($cgi) = @_;
+  my $locus = $cgi->param('locus');
+  if (defined $locus && $locus ne "") {
+    my $gene = locusTagToGene($locus) || die "Unknown locus tag in locus parameter";
+    my ($seq) = $dbh->selectrow_array("SELECT sequence FROM Protein WHERE proteinId = ?",
+                                      { Slice => {} }, $gene->{proteinId})
+      if $gene->{proteinId} ne "";
+    return ($gene, $gene->{locusTag} . " " . $gene->{desc}, $seq);
+  }
+  #else
+  my $seqDesc = $cgi->param('seqDesc');
+  die "Must specify seqDesc if no locus" unless defined $seqDesc && $seqDesc ne "";
+  my $seq = $cgi->param('seq') || die "Must specify seq if no locus";
+  $seq =~ m/^[A-Z]+$/ || die "Invalid sequence";
+  return (undef, $seqDesc, $seq);
+}
 1;

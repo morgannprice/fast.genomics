@@ -30,9 +30,7 @@ if (!defined $gene) {
 }
 
 my $gid = $gene->{gid};
-my $genome = $dbh->selectrow_hashref("SELECT * FROM Genome WHERE gid = ?",
-                                     {}, $gid)
-  || die "Cannot find genome $gid";
+my $genome = gidToGenome($gid) || die "Cannot find genome $gid";
 
 my @lines = ();
 push @lines, "Genome: " . i($genome->{gtdbSpecies}) . " " . $genome->{strain}
@@ -93,6 +91,17 @@ print join("\n",
            "</g>",
            </svg>) . "\n";
 
+if (defined $seq) {
+  if (hasMMSeqsHits($seq)) {
+    print p("See", a({-href => "neighbors.cgi?locus=$locusTag"}, "gene neighborhoods of homologs"));
+  } else {
+    print p(a{ -href => "findHomologs.cgi?locus=$locusTag" }, "Find homologs with mmseqs2",
+            "(fast)");
+  }
+}
+print "\n";
+
+# Genes as table -- maybe another page ?
 #my $iMax = scalar(@$nearbyGenes) - 1;
 #my ($iThis) = grep $nearbyGenes->[$_]{locusTag} eq $gene->{locusTag}, (0..$iMax);
 #die "gene is not near itself" unless defined $iThis;

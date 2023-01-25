@@ -5,6 +5,7 @@ use CGI::Carp qw(warningsToBrowser fatalsToBrowser);
 use IO::Handle; # for autoflush
 use DBI;
 use HTML::Entities;
+use URI::Escape;
 use lib "../lib";
 use neighbor;
 # neighborWeb.pm relies on various PaperBLAST libraries
@@ -36,7 +37,7 @@ start_page('title' => $query eq "" ? "" : "Gene search");
 autoflush STDOUT 1; # show preliminary results
 
 my %query = parseGeneQuery($query);
-if (!defined $query{gene} && !defined $query{genes} && !defined $query{seq}) {
+if (!defined $query{genes} && !defined $query{seq}) {
   print p(b($query{error})) if $query{error};
   print start_form( -name => 'input', -method => 'GET', -action => 'search.cgi' ),
     p("Enter an identifier from UniProt, RefSeq, PDB, or MicrobesOnline,",
@@ -57,7 +58,7 @@ if (defined $query{genes}) {
   my $genes = $query{genes};
   # show table of genes
   my $gid = $genes->[0]{gid};
-  my $genome = getDbHandle()->selectrow_hashref("SELECT * FROM Genome WHERE gid = ?", {}, $gid);
+  my $genome = gidToGenome($gid) || die $gid;
   die $gid unless $genome;
   print p("Found", scalar(@$genes), " matches in $genome->{gtdbSpecies} $genome->{strain} ($genome->{gid})");
   foreach my $gene (@$genes) {
@@ -65,43 +66,31 @@ if (defined $query{genes}) {
     print p(a({href => "gene.cgi?locus=$locusTag"}, $locusTag),
             $gene->{proteinId}, $gene->{desc});
   }
+  my $query2 = $query; $query2 =~ s/^\S+\s+//;
+  my $curatedURL = "https://papers.genomics.lbl.gov/cgi-bin/genomeSearch.cgi?gdb=NCBI"
+    . "&gid=${gid}&query=" . uri_escape($query2);
+  print p("Or search for", encode_entities($query2), "in $genome->{gtdbSpecies} $genome->{strain} using", a({-href =>  $curatedURL }, "Curated BLAST"));
   finish_page();
 }
 
-if (defined $query{gene}) {
-  my $gene = $query{gene};
-  my $proteinId = $gene->{proteinId};
-  my $genome = getDbHandle()->selectrow_hashref("SELECT * FROM Genome WHERE gid = ?", {}, $gene->{gid});
-  print p("Found gene", $gene->{locusTag}, $gene->{proteinId}, encode_entities($gene->{desc}),
-          "in",
-          i($genome->{gtdbSpecies}), $genome->{strain});
-} elsif (defined $query{seqDesc}) {
-  print p("Found $query{seqDesc}")."\n";
-}
-
 finish_page() unless defined $query{seq};
+
 my $seq = $query{seq};
 $seq =~ s/[*]//g;
 $seq =~ m/^[a-zA-Z]+$/ || die("Sorry, input sequence has invalid characters");
 my $seqDesc = $query{seqDesc}
   || length($seq) . " a.a. beginning with " . substr($seq, 0, 10);
-print showSequence($seqDesc, $seq), "\n";
 
-my $hits = getMMSeqsHits(uc($seq));
-my $hitGenes = hitsToGenes($hits);
+print p("Found", encode_entities($seqDesc));
+print showSequence($seqDesc, $seq);
 
-my $maxScore = 0;
-if (@$hitGenes > 0) {
-  my $top = $hitGenes->[0];
-  my $coverage = ($top->{qEnd} - $top->{qBegin} + 1)/length($seq);
-  $maxScore = $top->{bits} / ($top->{identity} * $coverage);
+my $seqDescE = uri_escape($seqDesc);
+if (hasMMSeqsHits($seq)) {
+  print p(a({-href => "neighbors.cgi?seqDesc=${seqDescE}&seq=${seq}"},
+            "See gene context of its homologs"));
+} else {
+  print p(a({-href => "findHomologs.cgi?seqDesc=$seqDescE&seq=${seq}"}, "Find homologs with mmseqs2"),
+          "(fast)");
 }
-my %gidHits = map { $_->{gid} => $_ } @$hitGenes;
-my ($nGenomes) = getDbHandle()->selectrow_array("SELECT COUNT(*) FROM Genome");
-print p("Found", scalar(@$hitGenes), "hits in",
-        scalar(keys %gidHits) . " of $nGenomes genomes");
-print p("Found",
-        scalar(grep $_->{bits} >= $maxScore*0.3, @$hitGenes),
-        "hits with &ge;30% of max score (at least " . sprintf("%.1f",0.3 * $maxScore) . " bits)");
-
 finish_page();
+
