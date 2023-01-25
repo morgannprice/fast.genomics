@@ -94,7 +94,7 @@ foreach my $hit (@$geneHits) {
   my $nHitAA = int(0.5 + ($hit->{end} - $hit->{begin} + 1 - 3)/3);
   my $seqLen = length($seq);
   my $eValue = sprintf("%.2g", $hit->{eValue});
-  my $hitDetails = "$hit->{qBegin}:$hit->{qEnd}/$seqLen of $locusTag"
+  my $hitDetails = "$hit->{qBegin}:$hit->{qEnd}/$seqLen of $qShow"
     . " is ${identity}% identical to $hit->{sBegin}:$hit->{sEnd}/$nHitAA of $hit->{locusTag} (E = $eValue)";
   my $domainChar = $hitGenome->{gtdbDomain} eq "Bacteria" ? "B" : "A";
   my $domainColor = $domainChar eq "B" ? "blue" : "green";
@@ -117,6 +117,14 @@ foreach my $hit (@$geneHits) {
     $s->{label} = $s->{locusTag};
     $s->{URL} = "gene.cgi?locus=" . $s->{locusTag};
     $s->{color} = $s->{locusTag} eq $hit->{locusTag} ? "lightblue" : "lightgrey";
+    if ($s->{locusTag} eq $hit->{locusTag}
+        && ! (defined $gene && $gene->{locusTag} eq $hit->{locusTag})) {
+      my $aaLength = ($hit->{end} - $hit->{begin} + 1 - 3)/3;
+      $s->{bar} = { beginFraction => ($hit->{sBegin} - 1)/$aaLength,
+                    endFraction => min(1, $hit->{sEnd}/$aaLength),
+                    title => $hitDetails,
+                    color => "blue" };
+    }
   }
   my %genesSvg = genesSvg(\@showGenes,
                           'begin' => $showBegin, 'end' => $showEnd,
@@ -125,7 +133,7 @@ foreach my $hit (@$geneHits) {
                           'showLabel' => $hit->{locusTag} eq $geneHits->[0]{locusTag},
                           'invert' => $hit->{strand} eq "-");
   push @svgLines, $genesSvg{svg};
-  $yAt = max($yAt, $genesSvg{yMax}) + 10;
+  $yAt = max($yAt, $genesSvg{yMax}) + 2;
   $xMax = max($xMax, $genesSvg{xMax});
 }
 my %scaleBarSvg = scaleBarSvg('xLeft' => $xMax * 0.7,

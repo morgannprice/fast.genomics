@@ -15,7 +15,8 @@ my $defaultKbWidth = 150;
 #
 # The first argument is a list of genes to show
 #	each gene should include begin, end, strand, and optionally
-#	color, label, desc, and URL
+#	color, label, desc, URL, and bar, which if present should contain
+#	beginFraction, endFraction, and optionally color and title
 # The remaining arguments are parameters, which may include
 #       begin/end -- tracks will be clipped to these coordinates
 #	   defaults to minimum and maximum begin/end of genes
@@ -114,9 +115,27 @@ sub genesSvg {
       }
     }
     push @svgLines, "</a>";
+    if (exists $gene->{bar} && ! $truncateLeft && ! $truncateRight) {
+      my $bar = $gene->{bar};
+      my ($xBar1, $xBar2);
+      if ($showStrand eq "+") {
+        $xBar1 = $x1 + $bar->{beginFraction} * ($x2-$x1);
+        $xBar2 = $x1 + $bar->{endFraction} * ($x2-$x1);
+      } else {
+        $xBar1 = $x2 - $bar->{beginFraction} * ($x2-$x1);
+        $xBar2 = $x2 - $bar->{endFraction} * ($x2-$x1);
+      }
+      my $yBar = $yTop + $geneHeight + 4;
+      my $barColor = $bar->{color} || "darkgrey";
+      push @svgLines,
+        qq[<line x1="$xBar1" x2="$xBar2" y1="$yBar" y2="$yBar" style="stroke: $barColor; stroke-width: 3;">];
+      push @svgLines, "<title>" . encode_entities($bar->{title}) . "</title>"
+        if defined $bar->{title} && $bar->{title} ne "";
+      push @svgLines, "</line>";
+    }
   }
   return (svg => join("\n", @svgLines) . "\n",
-          xMax => int(0.99 + $xRight), yMax => int(0.5 + $yTop + $geneHeight));
+          xMax => int(0.99 + $xRight), yMax => int(0.5 + $yTop + $geneHeight + 8));
 }
 
 # input should be a hash that includes yTop
