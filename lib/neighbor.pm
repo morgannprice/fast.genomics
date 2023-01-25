@@ -22,7 +22,7 @@ sub parseTaxString($) {
 }
 
 # Given a file handle, returns a list of alignments, each containing
-# query, subject, qBegin, qEnd, qLength, sBegin, sEnd, sLength, bits, score, evalue, match, (fraction) identity
+# query, subject, qBegin, qEnd, qLength, sBegin, sEnd, sLength, bits, score, eValue, match, (fraction) identity
 # (1-based coordinates)
 # Only protein alignments are supported.
 sub parseLast($) {
@@ -91,7 +91,7 @@ sub parseLast($) {
         my $identity = 100 * $nMatch/length($qAln);
         my $out = { 'query' => $query, 'qLength' => $qLength, 'qBegin' => $qBegin, 'qEnd' => $qEnd,
                     'subject' => $subject, 'sLength' => $sLength, 'sBegin' => $sBegin, 'sEnd' => $sEnd,
-                    'score' => $score, 'evalue' => $evalue, 'bits' => $bits, 'EG2' => $EG2,
+                    'score' => $score, 'eValue' => $evalue, 'bits' => $bits, 'EG2' => $EG2,
                     'alnLength' => length($qAln),
                     'nMatch' => $nMatch, 'nMismatch' => $nMismatch, 'nGapOpen' => $nGapOpen,
                     'identity' => $identity };
