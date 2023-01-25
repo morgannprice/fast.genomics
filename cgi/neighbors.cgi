@@ -68,7 +68,7 @@ print "\n";
 my $hits = getMMSeqsHits($seq);
 my $geneHits = hitsToTopGenes( $hits, $n);
 if (scalar(@$geneHits) == 0) {
-  print p("Sorry, no homologs for this sequence");
+  print p("Sorry, no homologs were found for this sequence");
   finish_page;
 }
 if (@$geneHits < $n) {
@@ -82,17 +82,30 @@ print "\n";
 my $nHits = scalar(@$geneHits);
 my $yAt = 5;
 my @svgLines = ();
-my $xMax = 500;
+my $xMax = 500; # it will actually be much higher for the gene track
 
 foreach my $hit (@$geneHits) {
   my $hitGenome = gidToGenome($hit->{gid}) || die;
   my $genomeURL = encode_entities("https://www.ncbi.nlm.nih.gov/assembly/$hitGenome->{gid}/");
-  $yAt += 15; # make space for genome label
+  $yAt += 25; # make space for genome label
+  my $identity = int(100 * $hit->{identity} + 0.5);
+  my $qShow = $locusTag || "query";
+  my $nHitAA = int(0.5 + ($hit->{end} - $hit->{begin} + 1 - 3)/3);
+  my $seqLen = length($seq);
+  my $eValue = sprintf("%.2g", $hit->{eValue});
+  my $hitDetails = "$hit->{qBegin}:$hit->{qEnd}/$seqLen of $locusTag"
+    . " is ${identity}% identical to $hit->{sBegin}:$hit->{sEnd}/$nHitAA of $hit->{locusTag} (E = $eValue)";
+  my $domainChar = $hitGenome->{gtdbDomain} eq "Bacteria" ? "B" : "A";
+  my $domainColor = $domainChar eq "B" ? "blue" : "green";
   push @svgLines,
+    qq[<text x="0" y="$yAt" font-size="90%"><title>$hitDetails</title>${identity}% id., $hit->{bits} bits</text>],
+    qq[<text x="140" y="$yAt" font-family="bold" font-size="90%" fill=$domainColor>],
+    qq[<title>$hitGenome->{gtdbDomain}</title>$domainChar</text>],
     qq[<a xlink:href="$genomeURL">],
-    qq[<text x="0" y="$yAt" font-style="italic">],
+    qq[<text x="155" y="$yAt">],
     qq[<title>$hitGenome->{gtdbSpecies} strain $hitGenome->{strain} ($hitGenome->{gid})</title>],
-    qq[$hitGenome->{gtdbSpecies}</text></a>];
+    qq[<tspan font-size="75%"> $hitGenome->{gtdbPhylum} $hitGenome->{gtdbClass} $hitGenome->{gtdbOrder} $hitGenome->{gtdbFamily}</tspan>],
+    qq[<tspan font-style="italic" font-size="90%">$hitGenome->{gtdbSpecies}</tspan></text></a>];
   $yAt += 6;
   my $nearbyGenes = getNearbyGenes($hit);
   my $mid = ($hit->{begin} + $hit->{end})/2;
@@ -114,7 +127,7 @@ foreach my $hit (@$geneHits) {
   $yAt = max($yAt, $genesSvg{yMax}) + 10;
   $xMax = max($xMax, $genesSvg{xMax});
 }
-my %scaleBarSvg = scaleBarSvg('xLeft' => $xMax * 0.8,
+my %scaleBarSvg = scaleBarSvg('xLeft' => $xMax * 0.7,
                               'yTop' => $yAt + 5);
 my $svgWidth = max($xMax, $scaleBarSvg{xMax});
 my $svgHeight = $scaleBarSvg{yMax};
