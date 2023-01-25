@@ -20,5 +20,5 @@ foreach my $hit (@$hits) {
              sprintf("%.2f",$hit->{identity}), $hit->{alnLength},
              $hit->{nMismatch}, $hit->{nGapOpen},
              $hit->{qBegin}, $hit->{qEnd}, $hit->{sBegin}, $hit->{sEnd},
-             $hit->{evalue}, sprintf("%.1f", $hit->{bits}))."\n";
+             $hit->{eValue}, sprintf("%.1f", $hit->{bits}))."\n";
 }
