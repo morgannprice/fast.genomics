@@ -19,12 +19,21 @@ use pbweb qw{commify};
 # CGI arguments:
 # locus (a locus tag in the database) or seqDesc and seq
 # n -- max number of hits to show
+# kb -- how many kilobases to show
+# hitType -- top or random; top means show top hits and is the default
+#	random means select that many random good hits
 my $cgi = CGI->new;
 my ($gene, $seqDesc, $seq) = getGeneSeqDesc($cgi);
 my $n = $cgi->param('n');
 $n = 50 unless defined $n && $n =~ m/^\d+$/;
 $n = 200 if $n > 200;
-my $ntShown = 6000;
+my $kbShown = $cgi->param('kb') || 6;
+die "Invalid kb" unless $kbShown =~ m/^\d+/;
+$kbShown = min(25, max(2, $kbShown));
+my $ntShown = $kbShown * 1000;
+my $kbWidth = int(0.5 + 150 / ($kbShown/6));
+my $hitType = $cgi->param('hitType') || 'top';
+die "Invalid hitType" unless $hitType eq 'top' || $hitType eq 'random';
 
 if (defined $gene && ! $seq) {
   # should not be reachable, but redirect to gene page just in case
@@ -33,17 +42,15 @@ if (defined $gene && ! $seq) {
 }
 die unless $seq;
 
-my $options = defined $gene ? "locus=".$gene->{locusTag}
-  : "seqDesc=" . encode_entities($seqDesc) . "&" . "seq=$seq";
-unless (hasMMSeqsHits($seq)) {
-  print redirect(-url => "findHomologs.cgi?${options}");
-  exit(0);
-}
-
 my ($locusTag, $genome);
 if (defined $gene) {
   $locusTag = $gene->{locusTag};
   $genome = gidToGenome($gene->{gid}) || die;
+}
+
+unless (hasMMSeqsHits($seq)) {
+  print redirect(-url => "findHomologs.cgi?" . geneSeqDescSeqOptions($gene, $seqDesc, $seq));
+  exit(0);
 }
 
 my $title = 'Gene neighborhoods';
@@ -61,24 +68,63 @@ if (defined $gene) {
           "from",
           i($genome->{gtdbSpecies}), $genome->{strain}.":",
           encode_entities($gene->{desc}));
-} else {
-  print showSequence($seqDesc, $seq),
 }
 print "\n";
 
 my $hits = getMMSeqsHits($seq);
-my $geneHits = hitsToTopGenes( $hits, $n);
-if (scalar(@$geneHits) == 0) {
+if (scalar(@$hits) == 0) {
   print p("Sorry, no homologs were found for this sequence");
   finish_page;
 }
-if (@$geneHits < $n) {
-  print p("Showing all", commify(scalar(@$geneHits)), "hits");
+my $geneHits; # reference to a list of gene hits
+my $scoreThreshold;
+if ($hitType eq "top") {
+  $geneHits = hitsToTopGenes( $hits, $n);
 } else {
-  print p("Showing the top $n hits, out of at least", commify(scalar(@$hits)));
+  my $maxScore = estimateTopScore($hits->[0], $seq);
+  $scoreThreshold = sprintf("%.1f", 0.3 * $maxScore);
+  $geneHits = hitsToRandomGenes( $hits, $n, $scoreThreshold);
+}
+if (@$geneHits < $n && $hitType eq "top") {
+  print p("Showing $kbShown kb around all", commify(scalar(@$geneHits)), "hits");
+} elsif ($hitType eq "top") {
+  print p("Showing $kbShown kb around the top $n hits, out of at least",
+          commify(scalar(@$hits)));
+} else {
+  print p("Showing $kbShown kb around",
+          scalar(@$geneHits),
+          "random good hits (&ge; $scoreThreshold bits), out of at least",
+          commify(scalar(grep $_->{bits} >= $scoreThreshold, @$hits)), "good hits");
 }
 print "\n";
 
+# Show options form
+my $randomOption = "";
+print
+  start_form( -name => 'input', -method => 'GET', -action => 'neighbors.cgi' ),
+  geneSeqDescSeqHidden($gene, $seqDesc, $seq),
+  p('Hits to show:',
+    popup_menu(-name => 'n', -values => [25, 50, 100, 150, 200], -default => $n),
+    popup_menu(-name => 'hitType', -values => ["random", "top"],
+               -labels => { 'top' => 'top hits',
+                            'random' => 'random good hits' },
+               -default => $hitType),
+    "&nbsp;",
+    'Kilobases:', popup_menu(-name => 'kb', -values => [6, 9, 12, 18, 25], -default => $kbShown),
+    "&nbsp;",
+    submit('Change')),
+  end_form;
+
+my @links = ();
+my $options = geneSeqDescSeqOptions($gene,$seqDesc,$seq);
+if (defined $gene) {
+  push @links, a({-href => "gene.cgi?$options"}, "gene");
+} else {
+  push @links, a({-href => "seq.cgi?$options"}, "sequence");
+}
+push @links, a({-href => "hitTaxa.cgi?$options"},
+               "taxonomic distribution"). " of its homologs";
+print p("Or see", join(" or ", @links)), "\n";
 
 my $nHits = scalar(@$geneHits);
 my $yAt = 5;
@@ -190,6 +236,7 @@ foreach my $hit (@$geneHits) {
   }
   my %genesSvg = genesSvg($hit->{showGenes},
                           'begin' => $showBegin, 'end' => $showEnd,
+                          'kbWidth' => $kbWidth,
                           'yTop' => $yAt,
                           # labels only for the top row
                           'showLabel' => $hit->{locusTag} eq $geneHits->[0]{locusTag},

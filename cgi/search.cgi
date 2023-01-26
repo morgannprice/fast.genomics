@@ -86,8 +86,13 @@ print showSequence($seqDesc, $seq);
 
 my $seqDescE = uri_escape($seqDesc);
 if (hasMMSeqsHits($seq)) {
-  print p(a({-href => "neighbors.cgi?seqDesc=${seqDescE}&seq=${seq}"},
-            "See gene context of its homologs"));
+  print p("See",
+          a({-href => "neighbors.cgi?seqDesc=${seqDescE}&seq=${seq}"},
+            "gene neighborhoods"),
+          "or",
+          a({-href => "hitTaxa.cgi?seqDesc=${seqDescE}&seq=${seq}"},
+            "taxonomic distribution"),
+          "of its homologs");
 } else {
   print p(a({-href => "findHomologs.cgi?seqDesc=$seqDescE&seq=${seq}"}, "Find homologs with mmseqs2"),
           "(fast)");

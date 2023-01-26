@@ -97,7 +97,11 @@ print join("\n",
 
 if (defined $seq) {
   if (hasMMSeqsHits($seq)) {
-    print p("See", a({-href => "neighbors.cgi?locus=$locusTag"}, "gene neighborhoods of homologs"));
+    print p("See",
+            a({-href => "neighbors.cgi?locus=$locusTag"}, "gene neighborhoods"),
+            "or",
+            a({-href => "hitTaxa.cgi?locus=$locusTag"}, "taxonomic distribution"),
+            "of homologs");
   } else {
     print p(a{ -href => "findHomologs.cgi?locus=$locusTag" }, "Find homologs with mmseqs2",
             "(fast)");

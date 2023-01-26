@@ -52,7 +52,11 @@ print p("Found",
 
 my $options = defined $gene ? "locus=".$gene->{locusTag}
   : "seqDesc=" . encode_entities($seqDesc) . "&" . "seq=$seq";
-print p("See", a({-href => "neighbors.cgi?${options}"}, "gene neighborhoods"), "of homologs")
+print p("See",
+        a({-href => "neighbors.cgi?${options}"}, "gene neighborhoods"),
+        "or",
+        a({-href => "hitTaxa.cgi?${options}"}, "taxonomic distribution"),
+        "of homologs")
   if @$hitGenes > 0;
 print p("Or see", a({-href => "gene.cgi?locus=$gene->{locusTag}"}, "gene"))
   if defined $gene;

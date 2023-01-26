@@ -5,7 +5,7 @@ use strict;
 
 our (@ISA,@EXPORT);
 @ISA = qw(Exporter);
-@EXPORT = qw(parseTaxString readMMSeqsHits);
+@EXPORT = qw(parseTaxString readMMSeqsHits estimateTopScore);
 
 # Returns a hash of d/p/c/o/f/g/s to value
 # (any of which could be missing),
@@ -54,5 +54,15 @@ sub readMMSeqsHits($) {
   return \@out;
 }
 
+# Given the top hit and the sequence, estimate what the
+# maximum possible bit score would be.
+# (If the top hit is exact, this will just return the top bit score.)
+sub estimateTopScore($$) {
+  my ($top, $seq) = @_;
+  my $maxBits = $top->{bits};
+  my $maxCov = ($top->{qEnd} - $top->{qBegin} + 1) / length($seq);
+  my $maxIdentity = $top->{identity};
+  return $maxBits / ($maxCov * $maxIdentity);
+}
 1;
 

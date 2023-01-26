@@ -18,13 +18,15 @@ use clusterProteins;
 
 our (@ISA,@EXPORT);
 @ISA = qw(Exporter);
-@EXPORT = qw{getDbHandle parseGeneQuery hasMMSeqsHits getMMSeqsHits parseGeneQuery
-             hitsToGenes hitsToTopGenes
+@EXPORT = qw{getDbHandle parseGeneQuery hasMMSeqsHits getMMSeqsHits
+             parseGeneQuery
+             getGeneSeqDesc geneSeqDescSeqOptions geneSeqDescSeqHidden
+             hitsToGenes hitsToTopGenes hitsToRandomGenes
              start_page finish_page
              locusTagToGene getNearbyGenes gidToGenome
              showSequence formatFastaHtml proteinAnalysisLinks
-             getGeneSeqDesc
-             clusterGenes};
+             clusterGenes
+             domainHtml};
 
 my $dbh = undef;
 sub getDbHandle() {
@@ -239,6 +241,26 @@ sub hitsToTopGenes($$) {
   return $hitGenes;
 }
 
+sub hitsToRandomGenes($$$) {
+  my ($hits, $n, $minBits) = @_;
+  return [] unless $n >= 1;
+  my @hits = @$hits;
+  # Always keep the top hit
+  my $top = shift @hits;
+  @hits = grep $_->{bits} >= $minBits, @hits;
+  if (scalar(@hits) > $n-1) {
+    srand(01262023);
+    my @indices = 0..(scalar(@hits) - 1);
+    my @rand = map rand, @indices;
+    @indices = sort { $rand[$a] <=> $rand[$b] } @indices;
+    splice @indices, $n-1;
+    @hits = map $hits[$_], @indices;
+  }
+  unshift @hits, $top;
+  @hits = sort { $b->{bits} <=> $a->{bits} } @hits;
+  return hitsToTopGenes(\@hits, $n);
+}
+
 sub TopDivHtml($$) {
   my ($banner, $URL) = @_;
   return <<END
@@ -258,7 +280,7 @@ sub start_page {
   my $title = $param{title} || "";
   my ($nGenomes) = getDbHandle()->selectrow_array("SELECT COUNT(*) FROM Genome");
   my $banner = $param{banner} || "<i>FastComper</i> &ndash; "
-    . qq{<SPAN style="font-size:smaller;"> browse }
+    . qq{<SPAN style="font-size:smaller;"> compare }
     . commify($nGenomes) . " representative genomes</SPAN>";
   my $bannerURL = $param{bannerURL} || 'search.cgi';
   print
@@ -400,6 +422,22 @@ sub getGeneSeqDesc($) {
   return (undef, $seqDesc, $seq);
 }
 
+sub geneSeqDescSeqOptions($$$) {
+  my ($gene, $seqDesc, $seq) = @_;
+  return "locus=$gene->{locusTag}" if defined $gene;
+  my $seqDescE = encode_entities($seqDesc);
+  return "seqDesc=$seqDescE&seq=$seq";
+}
+
+sub geneSeqDescSeqHidden($$$) {
+  my ($gene, $seqDesc, $seq) = @_;
+  return qq[<INPUT type="hidden" name="locus" value="$gene->{locusTag}">]
+    if defined $gene;
+  my $seqDescE = encode_entities($seqDesc);
+  return qq[<INPUT type="hidden" name="seqDesc" value="$seqDescE">]
+    . qq[<INPUT type="hidden" name="seq" value="$seq">];
+}
+
 # Given a list of objects, fetch their protein sequences and cluster them using lastal.
 # Returns a list of clusters, each of which is a list of gene objects.
 # Non-coding genes are never put in a cluster.
@@ -466,5 +504,17 @@ sub clusterGenes {
   }
   return \@geneClusters;
 }
+
+# Given a domain value, or a reference to a hash that has the gtdbDomain field,
+# return html for a blue B or green A
+sub domainHtml($) {
+  my ($domain) = @_;
+  $domain = $domain->{gtdbDomain} || die
+    if ref $domain;
+  my $domainChar = $domain eq "Bacteria" ? "B" : "A";
+  my $domainColor = $domainChar eq "B" ? "blue" : "green";
+  return qq[<a title="$domain" style="color: ${domainColor}; text-decoration: none;">$domainChar</a>];
+}
+
 
 1;
