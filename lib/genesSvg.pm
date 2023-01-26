@@ -97,6 +97,11 @@ sub genesSvg {
     my $pointstr = join(" ", map { $_->[0].",".$_->[1] } @points);
     my $color = $gene->{color} || "white";
     my $poly = qq{<polygon points="$pointstr" style="fill:$color; stroke:black; stroke-width:1;" />};
+    if ($color =~ m/url[(]/) {
+      # hatch shading -- put a background behind it
+      $poly = qq{<polygon points="$pointstr" style="fill:grey;" />}
+        . $poly;
+    }
     my $URL = encode_entities( $gene->{URL} || "");
     my $title = encode_entities( join(": ", $gene->{label}, $gene->{desc}) );
     $title = "(extends beyond this view) $title" if $truncateLeft || $truncateRight;
