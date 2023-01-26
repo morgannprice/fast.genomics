@@ -29,6 +29,8 @@ if (!defined $gene) {
   finish_page();
 }
 
+my $focalColor = '#a6cee3';; # see neighbors.pm
+
 my $gid = $gene->{gid};
 my $genome = gidToGenome($gid) || die "Cannot find genome $gid";
 
@@ -71,7 +73,7 @@ my @showGenes = grep $_->{end} >= $showBegin && $_->{begin} <= $showEnd, @$nearb
 foreach my $s (@showGenes) {
   $s->{label} = $s->{locusTag};
   $s->{URL} = "gene.cgi?locus=" . $s->{locusTag};
-  $s->{color} = $s->{locusTag} eq $gene->{locusTag} ? "lightblue" : "lightgrey";
+  $s->{color} = $s->{locusTag} eq $gene->{locusTag} ? $focalColor : "lightgrey";
 }
 
 my %genesSvg = genesSvg(\@showGenes,

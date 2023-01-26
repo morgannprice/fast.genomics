@@ -85,6 +85,45 @@ my $yAt = 5;
 my @svgLines = ();
 my $xMax = 500; # it will actually be much higher for the gene track
 
+my %genes = (); # locusTag => gene to show
+foreach my $hit (@$geneHits) {
+  my $nearbyGenes = getNearbyGenes($hit);
+  my $mid = ($hit->{begin} + $hit->{end})/2;
+  my $showBegin = $mid - $ntShown/2;
+  my $showEnd = $mid + $ntShown/2;
+  my @showGenes = grep $_->{end} >= $showBegin && $_->{begin} <= $showEnd, @$nearbyGenes;
+  $hit->{showGenes} = \@showGenes;
+  foreach my $s (@showGenes) {
+    $genes{ $s->{locusTag} } = $s;
+  }
+}
+
+# Color the genes
+# From colorbrewer2.org -- qualitative palette, n=12 (the maximum), and save the 1st color
+# for the query and its homologs
+my $focalColor = '#a6cee3';
+my @colors = ('#1f78b4','#b2df8a','#33a02c','#fb9a99','#e31a1c',
+              '#fdbf6f','#ff7f00','#cab2d6','#6a3d9a','#ffff99','#b15928');
+
+my %locusTagToColor = ();
+foreach my $hit (@$geneHits) {
+  $locusTagToColor{ $hit->{locusTag} } = $focalColor;
+}
+my $iColor = 0;
+my $clusters = clusterGenes(values %genes);
+foreach my $cluster (@$clusters) {
+  my $firstTag = $cluster->[0]{locusTag};
+  if (!exists $locusTagToColor{$firstTag}) {
+    $locusTagToColor{$firstTag} = $colors[$iColor];
+    $iColor++;
+    $iColor = 0 if $iColor >= @colors;
+  }
+  foreach my $s (@$cluster) {
+    $locusTagToColor{$s->{locusTag}} = $locusTagToColor{$firstTag}
+      unless exists $locusTagToColor{$s->{locusTag}};
+  }
+}
+
 foreach my $hit (@$geneHits) {
   my $hitGenome = gidToGenome($hit->{gid}) || die;
   my $genomeURL = encode_entities("https://www.ncbi.nlm.nih.gov/assembly/$hitGenome->{gid}/");
@@ -108,25 +147,23 @@ foreach my $hit (@$geneHits) {
     qq[<tspan font-size="75%"> $hitGenome->{gtdbPhylum} $hitGenome->{gtdbClass} $hitGenome->{gtdbOrder} $hitGenome->{gtdbFamily}</tspan>],
     qq[<tspan font-style="italic" font-size="90%">$hitGenome->{gtdbSpecies}</tspan></text></a>];
   $yAt += 6;
-  my $nearbyGenes = getNearbyGenes($hit);
   my $mid = ($hit->{begin} + $hit->{end})/2;
   my $showBegin = $mid - $ntShown/2;
   my $showEnd = $mid + $ntShown/2;
-  my @showGenes = grep $_->{end} >= $showBegin && $_->{begin} <= $showEnd, @$nearbyGenes;
-  foreach my $s (@showGenes) {
+  foreach my $s (@{ $hit->{showGenes} }) {
     $s->{label} = $s->{locusTag};
     $s->{URL} = "gene.cgi?locus=" . $s->{locusTag};
-    $s->{color} = $s->{locusTag} eq $hit->{locusTag} ? "lightblue" : "lightgrey";
+    $s->{color} = $locusTagToColor{$s->{locusTag}} || "lightgrey";
     if ($s->{locusTag} eq $hit->{locusTag}
         && ! (defined $gene && $gene->{locusTag} eq $hit->{locusTag})) {
       my $aaLength = ($hit->{end} - $hit->{begin} + 1 - 3)/3;
       $s->{bar} = { beginFraction => ($hit->{sBegin} - 1)/$aaLength,
                     endFraction => min(1, $hit->{sEnd}/$aaLength),
                     title => $hitDetails,
-                    color => "blue" };
+                    color => $focalColor };
     }
   }
-  my %genesSvg = genesSvg(\@showGenes,
+  my %genesSvg = genesSvg($hit->{showGenes},
                           'begin' => $showBegin, 'end' => $showEnd,
                           'yTop' => $yAt,
                           # labels only for the top row

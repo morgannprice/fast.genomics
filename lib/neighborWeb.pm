@@ -14,6 +14,7 @@ use pbweb qw{GetMotd commify
              VIMSSToFasta RefSeqToFasta UniProtToFasta FBrowseToFasta pdbToFasta};
 use pbutils qw{NewerThan};
 use neighbor;
+use clusterProteins;
 
 our (@ISA,@EXPORT);
 @ISA = qw(Exporter);
@@ -22,7 +23,8 @@ our (@ISA,@EXPORT);
              start_page finish_page
              locusTagToGene getNearbyGenes gidToGenome
              showSequence formatFastaHtml proteinAnalysisLinks
-             getGeneSeqDesc};
+             getGeneSeqDesc
+             clusterGenes};
 
 my $dbh = undef;
 sub getDbHandle() {
@@ -394,4 +396,72 @@ sub getGeneSeqDesc($) {
   $seq =~ m/^[A-Z]+$/ || die "Invalid sequence";
   return (undef, $seqDesc, $seq);
 }
+
+# Given a list of objects, fetch their protein sequences and cluster them using lastal.
+# Returns a list of clusters, each of which is a list of gene objects.
+# Non-coding genes are never put in a cluster.
+# Caches the clustering
+sub clusterGenes {
+  my (@genes) = @_;
+  @genes = grep $_->{proteinId} ne "", @genes;
+  my %proteinToGenes = ();
+  foreach my $gene (@genes) {
+    push @{ $proteinToGenes{$gene->{proteinId}} }, $gene;
+  }
+  my @proteinIds = sort keys %proteinToGenes;
+
+  my $md5 = md5_hex(join(",", @proteinIds));
+  my $n = scalar(@proteinIds);
+  my $clusterFile = "../tmp/hits/${n}_${md5}.cluster";
+  my @proteinClusters;
+  if (-e $clusterFile) {
+    open (my $fh, "<", $clusterFile) || die "Cannot read $clusterFile";
+    while (my $line = <$fh>) {
+      chomp $line;
+      my @F = split /\t/, $line;
+      foreach my $proteinId (@F) {
+        die "Unknown protein $proteinId in $clusterFile"
+          unless exists $proteinToGenes{$proteinId};
+      }
+      push @proteinClusters, \@F;
+    }
+    close($fh) || die "Error reading $clusterFile";
+  } else {
+    my %proteinSeq = ();
+    foreach my $proteinId (keys %proteinToGenes) {
+      my ($seq) = $dbh->selectrow_array("SELECT sequence FROM Protein WHERE proteinId = ?",
+                                        {}, $proteinId);
+      die "Unknown proteinId $proteinId" unless $seq;
+      $proteinSeq{$proteinId} = $seq;
+    }
+    print CGI::p("Running LAST to cluster and color the proteins...")."\n";
+    @proteinClusters = @{ clusterProteins(\%proteinSeq, 0.5) };
+    foreach my $proteinCluster (@proteinClusters) {
+      foreach my $proteinId (@$proteinCluster) {
+        die "Unknown protein $proteinId from clusterProteins()"
+          unless exists $proteinToGenes{$proteinId};
+      }
+    }
+    my $tmpFile = "$clusterFile.$$.tmp";
+    open (my $fh, ">", $tmpFile) || die "Cannot write to $tmpFile";
+    foreach my $proteinCluster (@proteinClusters) {
+      print $fh join("\t", @$proteinCluster)."\n";
+    }
+    close($fh) || die "Error writing to $tmpFile";
+    rename($tmpFile, $clusterFile) || die "rename $tmpFile to $clusterFile failed";
+  }
+
+  # convert protein clusters to gene clusters
+  my @geneClusters = ();
+  foreach my $cluster (@proteinClusters) {
+    my @geneCluster = ();
+    foreach my $proteinId (@$cluster) {
+      die unless defined $proteinToGenes{$proteinId};
+      push @geneCluster, @{ $proteinToGenes{$proteinId} };
+    }
+    push @geneClusters, \@geneCluster;
+  }
+  return \@geneClusters;
+}
+
 1;
