@@ -98,29 +98,54 @@ foreach my $hit (@$geneHits) {
   }
 }
 
-# Color the genes
+# Color the genes based on clustering
+my $clusters = clusterGenes(values %genes);
+my %locusTagToICluster = ();
+foreach my $iCluster (0..(scalar(@$clusters)-1)) {
+  my $cluster = $clusters->[$iCluster];
+  foreach my $gene (@$cluster) {
+    $locusTagToICluster{ $gene->{locusTag} } = $iCluster;
+  }
+}
 # From colorbrewer2.org -- qualitative palette, n=12 (the maximum), and save the 1st color
 # for the query and its homologs
 my $focalColor = '#a6cee3';
-my @colors = ('#1f78b4','#b2df8a','#33a02c','#fb9a99','#e31a1c',
+my @clusterColorSet = ('#1f78b4','#b2df8a','#33a02c','#fb9a99','#e31a1c',
               '#fdbf6f','#ff7f00','#cab2d6','#6a3d9a','#ffff99','#b15928');
+# Add hatch patterns for more effective colors
+my @defLines = (); # at top of svg
+my @hatchFills = ();
+foreach my $iColor (0..(scalar(@clusterColorSet)-1)) {
+  my $baseColor = $clusterColorSet[$iColor];
+  my $angle = $iColor % 2 == 0 ? 45 :-45;
+  push @defLines,
+    qq[<pattern id="hatch$iColor" patternUnits="userSpaceOnUse" width="4" height="8"],
+    qq[  patternTransform="rotate($angle 2 2)" >],
+    qq[<path d="M -1,2 l 6,0" stroke="$baseColor" stroke-width="8" />"],
+    qq[</pattern>];
+  push @hatchFills, "url(#hatch$iColor)";
+}
+push @clusterColorSet, @hatchFills;
 
+my @iClusterColors = ();
 my %locusTagToColor = ();
 foreach my $hit (@$geneHits) {
   $locusTagToColor{ $hit->{locusTag} } = $focalColor;
 }
+# Color the top tracks first
 my $iColor = 0;
-my $clusters = clusterGenes(values %genes);
-foreach my $cluster (@$clusters) {
-  my $firstTag = $cluster->[0]{locusTag};
-  if (!exists $locusTagToColor{$firstTag}) {
-    $locusTagToColor{$firstTag} = $colors[$iColor];
-    $iColor++;
-    $iColor = 0 if $iColor >= @colors;
-  }
-  foreach my $s (@$cluster) {
-    $locusTagToColor{$s->{locusTag}} = $locusTagToColor{$firstTag}
-      unless exists $locusTagToColor{$s->{locusTag}};
+foreach my $hit (@$geneHits) {
+  foreach my $s (@{ $hit->{showGenes} }) {
+    my $sTag = $s->{locusTag};
+    next if exists $locusTagToColor{ $sTag };
+    if (exists $locusTagToICluster{ $sTag }) {
+      my $iCluster = $locusTagToICluster{ $sTag };
+      if (!defined $iClusterColors[$iCluster]) {
+        $iClusterColors[$iCluster] = $clusterColorSet[ $iColor++ ];
+        $iColor = 0 if $iColor >= scalar(@clusterColorSet);
+      }
+      $locusTagToColor{ $s->{locusTag} } = $iClusterColors[$iCluster];
+    }
   }
 }
 
@@ -179,7 +204,10 @@ my $svgWidth = max($xMax, $scaleBarSvg{xMax});
 my $svgHeight = $scaleBarSvg{yMax};
 
 print join("\n",
-           qq[<SVG width="$svgWidth" height="$svgHeight" style="position: relative; left: 1em;>],
+           qq[<SVG width="$svgWidth" height="$svgHeight" style="position: relative; left: 1em;">],
+           "<defs>",
+           @defLines,
+           "</defs>",
            qq[<g transform="scale(1.0)">],
            @svgLines,
            $scaleBarSvg{svg},
