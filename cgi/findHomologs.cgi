@@ -57,5 +57,12 @@ print p("See", a({-href => "neighbors.cgi?${options}"}, "gene neighborhoods"), "
 print p("Or see", a({-href => "gene.cgi?locus=$gene->{locusTag}"}, "gene"))
   if defined $gene;
 
+print
+  h3("Other sequence analysis tools"),
+  start_ul,
+  map li($_), proteinAnalysisLinks($seqDesc, $seq,
+                                   defined $gene ? gidToGenome($gene->{gid}) : undef);
+print end_ul;
+
 finish_page();
 

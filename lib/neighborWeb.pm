@@ -330,15 +330,18 @@ sub getNearbyGenes($) {
 }
 
 # returns a list of HTML strings
+# If $genome is undef, just uses gram negative models for psortb
 sub proteinAnalysisLinks($$$) {
   my ($header, $seq, $genome) = @_;
   $header = encode_entities($header);
 
   my ($psortType, $psortShow) = ("negative", "Gram-negative bacteria");
-  ($psortType, $psortShow) = ("positive", "Gram-positive bacteria")
-    if $genome->{gtdbPhylum} =~ m/^Firmicutes|Actinobacteriota/;
-  ($psortType, $psortShow) = ("archaea", "archaea")
-    if $genome->{gtdbDomain} eq "Archaea";
+  if (defined $genome) {
+    ($psortType, $psortShow) = ("positive", "Gram-positive bacteria")
+      if $genome->{gtdbPhylum} =~ m/^Firmicutes|Actinobacteriota/;
+    ($psortType, $psortShow) = ("archaea", "archaea")
+      if $genome->{gtdbDomain} eq "Archaea";
+  }
 
   my $newline = "%0A";
   my $fitnessBlastJs = <<END

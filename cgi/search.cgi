@@ -92,5 +92,11 @@ if (hasMMSeqsHits($seq)) {
   print p(a({-href => "findHomologs.cgi?seqDesc=$seqDescE&seq=${seq}"}, "Find homologs with mmseqs2"),
           "(fast)");
 }
+print
+  h3("Other sequence analysis tools"),
+  start_ul,
+  map li($_), proteinAnalysisLinks($seqDesc, $seq, undef);
+print end_ul;
+
 finish_page();
 
