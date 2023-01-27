@@ -28,10 +28,24 @@ if (scalar(@$hits) == 0) {
 my $geneHits = hitsToGenes($hits);
 my $genomes = getDbHandle()->selectall_hashref("SELECT * from Genome", "gid");
 
-my $filename = defined $gene ? "homologs_$gene->{locusTag}.tsv"
-  : "homologs_" . length($seq) . ".tsv";
+my $fileName = "homologs_";
+if (defined $gene) {
+  $fileName .= $gene->{locusTag};
+} else {
+  my $firstWord = $seqDesc;
+  if ($firstWord =~ m/^(sp|tr)[|]/) { # UniProt entries
+    $firstWord =~ s/^[a-zA-Z]+[|]//;
+  }
+  $firstWord =~ s/[|].*//;
+  if ($firstWord =~ m/^[a-zA-Z0-9._-]+$/) {
+    $fileName .= $firstWord;
+  } else {
+    $fileName .= length($seq);
+  }
+}
+$fileName .= ".tsv";
 print "Content-Type:text/tab-separated-values\n";
-print "Content-Disposition: attachment; filename=homologs.tsv\n\n";
+print "Content-Disposition: attachment; filename=$fileName\n\n";
 
 my @fields = qw{locusTag proteinId assemblyId
                 scaffoldId geneBegin geneEnd strand
