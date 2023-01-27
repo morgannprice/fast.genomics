@@ -36,7 +36,7 @@ if (defined $gene) {
   if ($firstWord =~ m/^(sp|tr)[|]/) { # UniProt entries
     $firstWord =~ s/^[a-zA-Z]+[|]//;
   }
-  $firstWord =~ s/[|].*//;
+  $firstWord =~ s/[| ].*//;
   if ($firstWord =~ m/^[a-zA-Z0-9._-]+$/) {
     $fileName .= $firstWord;
   } else {
