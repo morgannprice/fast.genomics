@@ -7,6 +7,7 @@ use CGI;
 use DBI;
 use Time::HiRes qw{gettimeofday tv_interval};
 use Digest::MD5 qw{md5_hex};
+use URI::Escape;
 use HTML::Entities;
 
 # from the PaperBLAST code base
@@ -187,8 +188,12 @@ sub parseGeneQuery($) {
                                          $genome->{gid},
                                          "${wordQuery}%", "%-${wordQuery}%",
                                          "% ${wordQuery}%", "% (${wordQuery}%");
-    return ("error" => "Sorry, no genes in $genome->{gtdbSpecies} $genome->{strain} ($genome->{gid}) match "
-            . encode_entities($wordQuery))
+    my $curatedURL = "https://papers.genomics.lbl.gov/cgi-bin/genomeSearch.cgi?gdb=NCBI"
+      . "&gid=$genome->{gid}&query=" . uri_escape($wordQuery);
+    return ("genome" => $genome,
+            "error" => "Sorry, no genes in $genome->{gtdbSpecies} $genome->{strain} ($genome->{gid}) match "
+            . encode_entities($wordQuery)
+            . ". Try " . CGI::a({-href => $curatedURL}, "Curated BLAST"))
       if @$genes == 0;
     return ('genes' => $genes);
   }
