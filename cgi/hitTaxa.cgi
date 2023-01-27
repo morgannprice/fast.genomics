@@ -80,13 +80,17 @@ print
   end_form;
 
 my @links = ();
-push @links, a({-href => "gene.cgi?locus=$gene->{locusTag}"}, "gene")
-  if defined $gene;
-push @links, a({-href => "seq.cgi?" . geneSeqDescSeqOptions($gene,$seqDesc,$seq) },
-               "sequence") if !defined $gene;
-push @links, a({-href => "neighbors.cgi?" . geneSeqDescSeqOptions($gene,$seqDesc,$seq) },
-            "gene neighborhoods") . " of homologs";
-print p("Or see", join(" or ", @links)), "\n";
+my $options = geneSeqDescSeqOptions($gene,$seqDesc,$seq);
+if (defined $gene) {
+  push @links, a({-href => "gene.cgi?$options"}, "gene");
+} else {
+  push @links, a({-href => "seq.cgi?$options"}, "sequence");
+}
+push @links, a({-href => "neighbors.cgi?$options"}, "gene neighborhoods")
+  . " of homologs";
+push @links, a({-href => "downloadHomologs.cgi?$options",
+               -title => "tab-delimited table of homologs"}, "download");
+print p("Or see", join(" or ", @links));
 
 my @levelsShow = ("Domain", "Phylum");
 unless ($taxLevel eq "phylum") {

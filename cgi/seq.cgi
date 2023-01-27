@@ -36,7 +36,11 @@ if (hasMMSeqsHits($seq)) {
           a({-href => "neighbors.cgi?$options"}, "gene neighborhoods"),
           "or",
           a({-href => "hitTaxa.cgi?$options"}, "taxonomic distribution"),
-          "of its homologs");
+          "of its homologs",
+          "or",
+          a({-href => "downloadHomologs.cgi?$options",
+             -title => "tab-delimited table of homologs"},
+            "download"));
 } else {
   print p(a({-href => "findHomologs.cgi?$options"}, "Find homologs with mmseqs2"),
           "(fast)");

@@ -92,7 +92,11 @@ if (hasMMSeqsHits($seq)) {
           "or",
           a({-href => "hitTaxa.cgi?seqDesc=${seqDescE}&seq=${seq}"},
             "taxonomic distribution"),
-          "of its homologs");
+          "of its homologs",
+         "or",
+          a({-href => "downloadHomologs.cgi?seqDesc=${seqDescE}&seq=${seq}",
+             -title => "tab-delimited table of homologs"},
+            "download"));
 } else {
   print p(a({-href => "findHomologs.cgi?seqDesc=$seqDescE&seq=${seq}"}, "Find homologs with mmseqs2"),
           "(fast)");

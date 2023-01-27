@@ -56,7 +56,10 @@ print p("See",
         a({-href => "neighbors.cgi?${options}"}, "gene neighborhoods"),
         "or",
         a({-href => "hitTaxa.cgi?${options}"}, "taxonomic distribution"),
-        "of homologs")
+        "of homologs",
+        "or",
+        a({-href => "downloadHomologs.cgi?${options}",
+           -title => "tab-delimited table of homologs"}, "download"))
   if @$hitGenes > 0;
 print p("Or see", a({-href => "gene.cgi?locus=$gene->{locusTag}"}, "gene"))
   if defined $gene;

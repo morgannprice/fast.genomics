@@ -106,7 +106,10 @@ if (defined $seq) {
             a({-href => "neighbors.cgi?locus=$locusTag"}, "gene neighborhoods"),
             "or",
             a({-href => "hitTaxa.cgi?locus=$locusTag"}, "taxonomic distribution"),
-            "of homologs");
+            "of homologs",
+           "or",
+           a({-href => "downloadHomologs.cgi?locus=$locusTag",
+              -title => "tab-delimited table of homologs"}, "download"));
   } else {
     print p(a{ -href => "findHomologs.cgi?locus=$locusTag" }, "Find homologs with mmseqs2",
             "(fast)");
