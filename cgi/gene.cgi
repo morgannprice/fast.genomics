@@ -58,6 +58,8 @@ if ($gene->{proteinId} ne "") {
 my $center = int(($gene->{begin} + $gene->{end})/2);
 my $showBegin =  max(1, min($gene->{begin} - 1000, $center - 4000));
 my $showEnd = max($gene->{end} + 1000, $center + 4000);
+my $showBegin2 =  max(1, min($gene->{begin} - 1000, $center - 8000));
+my $showEnd2 = max($gene->{end} + 1000, $center + 8000);
 my $ncbiBrowser = "https://www.ncbi.nlm.nih.gov/nuccore/$gene->{scaffoldId}?report=graph"
                  . "&from=$showBegin&to=$showEnd";
 push @lines, "Location: " . $gene->{scaffoldId} . " "
@@ -70,6 +72,7 @@ print "\n";
 
 my $nearbyGenes = getNearbyGenes($gene);
 my @showGenes = grep $_->{end} >= $showBegin && $_->{begin} <= $showEnd, @$nearbyGenes;
+my @showGenes2 = grep $_->{end} >= $showBegin2 && $_->{begin} <= $showEnd2, @$nearbyGenes;
 foreach my $s (@showGenes) {
   $s->{label} = $s->{locusTag};
   $s->{URL} = "gene.cgi?locus=" . $s->{locusTag};
@@ -85,8 +88,10 @@ my %scaleBarSvg = scaleBarSvg('xLeft' => $genesSvg{xMax} * 0.8,
 my $svgWidth = max($genesSvg{xMax}, $scaleBarSvg{xMax});
 my $svgHeight = $scaleBarSvg{yMax};
 
+my $genesURL = "genes.cgi?" . join("&", map "g=$_->{locusTag}", @showGenes2);
 print join("\n",
-           h3("Gene Neighborhood"),
+           qq{<TABLE width=100% border=0><TR><TD align="left" valign="top"><H3>Gene Neighborhood</h3></TD>},
+           qq{<TD align="right" valign="top"><A HREF="$genesURL">or see table</A></TD></TR></TABLE>},
            qq[<SVG width="$svgWidth" height="$svgHeight"
                     style="position: relative; left: 1em;>],
            qq[<g transform="scale(1.0)">],

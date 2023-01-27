@@ -16,7 +16,7 @@ use pbweb qw{commify};
 # CGI arguments:
 # locus (a locus tag in the database) or seqDesc and seq
 # taxLevel -- defaults to phylum
-# good -- set if show results for good hits only
+# Good -- set if show results for good hits only
 
 my $cgi = CGI->new;
 my ($gene, $seqDesc, $seq) = getGeneSeqDesc($cgi);
@@ -26,7 +26,7 @@ die "Unknown taxLevel"
   || $taxLevel eq "class"
   || $taxLevel eq "order"
   || $taxLevel eq "family";
-my $showGood = $cgi->param('good');
+my $showGood = $cgi->param('Good') ? 1 : "";
 
 if (defined $gene && ! $seq) {
   # should not be reachable, but redirect to gene page just in case
@@ -73,8 +73,8 @@ print
   p("Level:",
     popup_menu(-name => 'taxLevel', -values => [ qw(phylum class order family) ], -default => $taxLevel),
     "&nbsp;",
-    'Good hits only?',
-    checkbox(-name => 'good', -value => 1, -checked => $showGood),
+    checkbox(-name => 'Good', -checked => $showGood),
+    "hits only?",
     "&nbsp;",
     submit('Change')),
   end_form;
@@ -108,14 +108,14 @@ foreach my $genome (values %$genomes) {
   $taxStringN{ $genome->{taxString} }++;
 }
 
-my %taxa = (); # taxString to list of hits
+my %taxHits = (); # taxString to list of hits
 foreach my $gh (@$geneHits) {
   my $genome = $genomes->{ $gh->{gid} } || die $gh->{gid};
-  push @{ $taxa{$genome->{taxString}} }, $gh;
+  push @{ $taxHits{$genome->{taxString}} }, $gh;
 }
 # Each row includes taxString, taxLevels, nHits, nHitGenomes, nGenomes
 my @rows = ();
-while (my ($taxString, $tHits) = each %taxa) {
+while (my ($taxString, $tHits) = each %taxHits) {
   my $row = { 'taxString' => $taxString, 'nHits' => scalar(@$tHits) };
   $row->{nGenomes} = $taxStringN{$taxString} || die $taxString;
   # Count distinct genomes
@@ -138,11 +138,26 @@ my $maxRows = 200;
 foreach my $row (@rows) {
   my @out = split /;;;/, $row->{taxString};
   $out[0] = domainHtml($out[0]);
+  my $showNHits = commify($row->{nHits});
+  my @tHits = @{ $taxHits{ $row->{taxString} } };
+  my $truncate = 0;
+  my $maxShow = 250;
+  if (@tHits > $maxShow) {
+    $truncate = 1;
+    splice @tHits, $maxShow;
+  }
+  my $URL = "genes.cgi?" . join("&", map "g=" . $_->{locusTag}, @tHits);
+  my $goodString = $showGood ? "good" : "all";
+  my $truncateString = $truncate ? " top $maxShow" : "";
+  $showNHits = a({ -href => $URL,
+                   -style => "text-decoration: none;",
+                   -title => "see$truncateString $goodString hits in " . encode_entities($out[-1]) },
+                 $showNHits);
   my $bgColor = $iRow % 2 == 0 ? "lightgrey" : "white";
   print Tr({-style => "background-color: $bgColor;"},
            td(\@out),
            td({-style => "text-align: right;"},
-              [ commify($row->{nGenomes}), commify($row->{nHitGenomes}), commify($row->{nHits}) ])) . "\n";
+              [ commify($row->{nGenomes}), commify($row->{nHitGenomes}), $showNHits ])) . "\n";
   $iRow++;
   last if $iRow >= $maxRows;
 }
