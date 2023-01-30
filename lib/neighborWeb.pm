@@ -284,14 +284,14 @@ sub start_page {
   my (%param) = @_;
   my $title = $param{title} || "";
   my ($nGenomes) = getDbHandle()->selectrow_array("SELECT COUNT(*) FROM Genome");
-  my $banner = $param{banner} || "<i>FastComper</i> &ndash; "
-    . qq{<SPAN style="font-size:smaller;"> compare }
-    . commify($nGenomes) . " representative genomes</SPAN>";
+  $nGenomes = commify($nGenomes);
+  my $banner = $param{banner} || "<i>fast.genomics</i> &ndash; "
+    . qq{<SPAN style="font-size:smaller;"> compare $nGenomes genera of bacteria and archaea</SPAN>};
   my $bannerURL = $param{bannerURL} || 'search.cgi';
   print
     CGI::header(-charset => 'utf-8'),
     CGI::start_html(-head => CGI::Link({-rel => "shortcut icon", -href => "../static/favicon.ico"}),
-               -title => $title eq "" ? "FastComper" : "FastComper $title"),
+               -title => $title eq "" ? "fast.genomics" : "fast.genomics $title"),
     TopDivHtml($banner, $bannerURL),
     $title ? CGI::h2($title) : "",
     "\n";

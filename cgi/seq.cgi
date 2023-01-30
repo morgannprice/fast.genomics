@@ -50,4 +50,4 @@ print
   start_ul,
   map li($_), proteinAnalysisLinks($seqDesc, $seq, undef);
 print end_ul;
-print end_html;
+finish_page();
