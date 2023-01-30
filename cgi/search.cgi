@@ -87,16 +87,17 @@ print showSequence($seqDesc, $seq);
 my $seqDescE = uri_escape($seqDesc);
 if (hasMMSeqsHits($seq)) {
   print p("See",
-          a({-href => "neighbors.cgi?seqDesc=${seqDescE}&seq=${seq}"},
-            "gene neighborhoods"),
-          "or",
-          a({-href => "hitTaxa.cgi?seqDesc=${seqDescE}&seq=${seq}"},
-            "taxonomic distribution"),
-          "of its homologs",
-         "or",
-          a({-href => "downloadHomologs.cgi?seqDesc=${seqDescE}&seq=${seq}",
-             -title => "tab-delimited table of homologs"},
-            "download"));
+          join(", or ",
+               a({-href => "neighbors.cgi?seqDesc=${seqDescE}&seq=${seq}"},
+                 "gene neighborhoods"),
+               a({-href => "hitTaxa.cgi?seqDesc=${seqDescE}&seq=${seq}"},
+                 "taxonomic distribution"),
+               a({-href => "downloadHomologs.cgi?seqDesc=${seqDescE}&seq=${seq}",
+                  -title => "tab-delimited table of homologs"},
+                 "download homologs"),
+               a({-href => "compare.cgi?seqDesc=${seqDescE}&seq=${seq}",
+                  -title => "compare presence/absence of homologs and their proximity"},
+                 "compare presence/absence")));
 } else {
   print p(a({-href => "findHomologs.cgi?seqDesc=$seqDescE&seq=${seq}"}, "Find homologs with mmseqs2"),
           "(fast)");

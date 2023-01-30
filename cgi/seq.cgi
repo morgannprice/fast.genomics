@@ -33,14 +33,16 @@ h3("Protein sequence"),
 my $options = geneSeqDescSeqOptions($gene, $seqDesc, $seq);
 if (hasMMSeqsHits($seq)) {
   print p("See",
-          a({-href => "neighbors.cgi?$options"}, "gene neighborhoods"),
-          "or",
-          a({-href => "hitTaxa.cgi?$options"}, "taxonomic distribution"),
-          "of its homologs",
-          "or",
-          a({-href => "downloadHomologs.cgi?$options",
-             -title => "tab-delimited table of homologs"},
-            "download"));
+          join(", or ",
+               a({-href => "neighbors.cgi?$options"}, "gene neighborhoods"),
+               a({-href => "hitTaxa.cgi?$options"}, "taxonomic distribution")
+               . " of its homologs",
+               a({-href => "downloadHomologs.cgi?$options",
+                  -title => "tab-delimited table of homologs"},
+                 "download homologs"),
+               a({-href => "compare.cgi?$options",
+                  -title => "compare presence/absence of homologs and their proximity"},
+                 "compare presence/absence")));
 } else {
   print p(a({-href => "findHomologs.cgi?$options"}, "Find homologs with mmseqs2"),
           "(fast)");

@@ -89,8 +89,10 @@ if (defined $gene) {
 push @links, a({-href => "neighbors.cgi?$options"}, "gene neighborhoods")
   . " of homologs";
 push @links, a({-href => "downloadHomologs.cgi?$options",
-               -title => "tab-delimited table of homologs"}, "download");
-print p("Or see", join(" or ", @links));
+               -title => "tab-delimited table of homologs"}, "download homologs");
+push @links, a({-href => "compare.cgi?$options",
+               -title => "compare presence/absence of homologs and their proximity"}, "compare presence/absence");
+print p("Or see", join(", or ", @links));
 
 my @levelsShow = ("Domain", "Phylum");
 unless ($taxLevel eq "phylum") {
