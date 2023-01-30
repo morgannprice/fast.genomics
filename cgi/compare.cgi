@@ -254,14 +254,22 @@ my $nGoodBoth = scalar(@good);
 my $nGoodClose = scalar(grep $_->{close}, @good);
 my $nGoodSame = scalar(grep $_->{same}, @good);
 
+my $nGenomes = scalar(%$genomes);
+my $nBothExpect = $nSame == $nGenomes ? $nGenomes
+  : $nSame + (($n1-$nSame) * ($n2-$nSame))/($nGenomes-$nSame);
+my $nExpectGood = $nGoodSame == $nGenomes ? $nGenomes
+  : $nGoodSame + (($n1good - $nGoodSame) * ($n2good - $nGoodSame))/($nGenomes-$nGoodSame);
+
 print
   p("Found hits in", commify($n1), "and", commify($n2), "genomes, respectively.",
-    "$nInBoth genomes contain homologs of both genes."),
+    "$nInBoth genomes contain homologs of both genes (versus",
+    commify(int($nBothExpect+0.5)), "expected)."),
   p("Considering only the best hit in each genome,",
         "$nClose hits are nearby (within 5 kb) and on the same strand, and $nSame are to the same gene."),
   p("Found good hits (above 30% of maximum bit score) in",
     commify($n1good), "and", commify($n2good), "genomes, respectively.",
-    "$nGoodBoth genomes contain good homologs of both genes."),
+    "$nGoodBoth genomes contain good homologs of both genes (versus",
+    commify(int($nExpectGood+0.5)), "expected)."),
   p("Among the best hits in those $nGoodBoth genomes,",
     "$nGoodClose are nearby (within 5 kb) and on the same strand, and $nGoodSame are to the same gene.");
 
