@@ -17,7 +17,7 @@ sub logFactorial($) {
   my ($n) = @_;
   die $n if $n < 0;
   if (!defined $logFactorial[$n]) {
-    for (my $i = length(@logFactorial); $i <= $n; $i++) {
+    for (my $i = scalar(@logFactorial); $i <= $n; $i++) {
       $logFactorial[$i] = log($i) + $logFactorial[$i-1];
     }
   }
