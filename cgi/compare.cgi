@@ -10,7 +10,7 @@ use URI::Escape;
 use List::Util qw{min max};
 use lib "../lib";
 use neighbor;
-use genesSvg;
+use svgPlot;
 use binom qw{hyperLogProbTail};
 # neighborWeb.pm relies on various PaperBLAST libraries
 use lib "../../PaperBLAST/lib";
@@ -23,7 +23,7 @@ use pbweb qw{commify};
 # optional: format=tsv
 
 my $cgi = CGI->new;
-my $tsv = $cgi->param('format') eq 'tsv';
+my $tsv = ($cgi->param('format') || "") eq  'tsv';
 my ($gene, $seqDesc, $seq) = getGeneSeqDesc($cgi);
 my $options = geneSeqDescSeqOptions($gene,$seqDesc,$seq); # for 1st gene
 my $hidden = geneSeqDescSeqHidden($gene,$seqDesc,$seq); # for 1st gene
@@ -283,14 +283,17 @@ my $nInBothExpected = $nSame == $nGenomes ? $nGenomes
 my $nGoodBothE = $nGoodSame == $nGenomes ? $nGenomes
   : $nGoodSame + (($n1good - $nGoodSame) * ($n2good - $nGoodSame))/($nGenomes-$nGoodSame);
 
+# Put all the statistics on the left and the svg (if there is one) on the right, using a table
+# with 1 row and 2 columns
 print
-  h3("Co-occurence of Homologs"),
+  qq{<TABLE cellpadding=2 cellspacing=2><TR><TD valign="top">},
+  h4("Co-occurence of Homologs"),
   p("Found homologs in", commify($n1), "and", commify($n2), "genomes, respectively.",
     "$nInBoth genomes contain homologs of both genes (versus",
     commify(int($nInBothExpected+0.5)), "expected)."),
   p("Considering only the best hit in each genome,",
         "$nClose hits are nearby (within $closeKb kb) and on the same strand, and $nSame are to the same gene."),
-  h3("Co-occurence of Good Homologs"),
+  h4("Co-occurence of Good Homologs"),
   p("Found good homologs (above 30% of maximum bit score) in",
     commify($n1good), "and", commify($n2good), "genomes, respectively.",
     "$nGoodBoth genomes contain good homologs of both genes (versus",
@@ -299,7 +302,8 @@ print
     "$nGoodClose are nearby (within $closeKb kb) and on the same strand, and $nGoodSame are to the same gene.");
 
 # Find the most significant threshold (if any)
-# for the enrichment of the two being in the same genome
+# for the enrichment of the two being in the same genome,
+# and plot the similarity in gene presence
 if ($nInBoth > $nSame + 1) {
   my @gidsLeft = map $_->{gid}, grep ! $_->{same}, @gidValues;
   my $nGenomesLeft = $nGenomes - $nSame;
@@ -339,15 +343,16 @@ if ($nInBoth > $nSame + 1) {
   my $bestLogP = min(@logP);
   my ($bestI) = grep $logP[$_] == $bestLogP, (0..($n-1));
   my $correctedLog10P = ($bestLogP + log($n)) / log(10);
-  print h3("Strongest Threshold for Co-occurence");
-  if ($correctedLog10P < -2) {
+  print h4("Optimal Threshold for Co-occurence");
+  my ($thresh1,$thresh2);
+  if ($correctedLog10P < -3) {
     my %gidsThresh1 = map { $_ => 1 } @gids1[0..$bestI];
     my %gidsThresh2 = map { $_ => 1 } @gids2[0..$bestI];
     my @gidsThresh = grep exists $gidsThresh2{$_}, keys %gidsThresh1;
     my $nCloseThresh = scalar(grep $gidScores{$_}{close}, @gidsThresh);
-    my $thresh1 = $byg1{ $gids1[$bestI] }{bits};
+    $thresh1 = $byg1{ $gids1[$bestI] }{bits};
     my $f1 = int(0.5 + 100 * $thresh1/$max1);
-    my $thresh2 = $byg2{ $gids2[$bestI] }{bits};
+    $thresh2 = $byg2{ $gids2[$bestI] }{bits};
     my $f2 = int(0.5 + 100 * $thresh2/$max2);
     my $fClose = int(0.5 + 100 * $nCloseThresh/scalar(@gidsThresh));
     print p("The strongest statistical signal of co-occurence is for the top",
@@ -361,7 +366,91 @@ if ($nInBoth > $nSame + 1) {
   } else {
     print p("No significant co-occurence");
   }
+
+  # Show a scatterplot of ratio1 vs. ratio2 (or below 0 if no hit)
+  my $below = 0.1; # space at the bottom of non-hits, so you can see them better
+  my $plot = svgPlot->new(xRange => [-$below,1], yRange => [-$below,1],
+                          width => 500, height => 500,
+                          margin => [3,3,2,2]);
+  my @ticks = (0,0.2,0.4,0.6,0.8,1.0);
+  print qq{</TD><TD valign="top">};
+  print $plot->start();
+  my $x0 = $plot->convertX(0);
+  my $y0 = $plot->convertY(0);
+  my $drawWidth = $plot->{drawRight} - $plot->{drawLeft};
+  my $drawHeight = $plot->{drawBottom} - $plot->{drawTop};
+  my $below0Width = $x0 - $plot->{drawLeft};
+  my $below0Height = $plot->{drawBottom} - $y0;
+  print join("\n",
+             qq{<rect x="$plot->{drawLeft}" y="$y0" width="$drawWidth" height="$below0Height" fill="lightgrey" stroke="none">},
+             qq{<title>genomes with no hit to either gene are in the grey region</title>},
+             qq{</rect>},
+             qq{<rect x="$plot->{drawLeft}" y="$plot->{drawTop}" width="$below0Width" height="$drawHeight" fill="lightgrey" stroke="none">},
+             qq{<title>genomes with homologs for only one of the genes are shown in the grey region</title>},
+             qq{</rect>});
+  {
+    my $x = $plot->convertX(0.3);
+    my $y = $plot->convertY(0.3);
+    my $params = qq{ stroke="orange" stroke-dasharray="4" };
+    my $title = qq{The "good" threshold (both score ratios >= 0.3)};
+    print qq{<line x1="$x" y1="$y" x2="$x" y2="$plot->{drawTop}" $params ><title>$title</title></line>};
+    print qq{<line x1="$x" y1="$y" x2="$plot->{drawRight}" y2="$y" $params ><title>$title</title></line>};
+    print qq{<text x="$plot->{drawRight}" y="$y" text-anchor="end" dominant-baseline="bottom" fill="orange"><title>$title</title>good</text>};
+  }
+  if (defined $thresh1) {
+    my $x = $plot->convertX($thresh1/$max1);
+    my $y = $plot->convertY($thresh2/$max2);
+    my $params = qq{ stroke="blue" stroke-dasharray="4" };
+    my $title = qq{The 'optimal' threshold, from maximizing -log(P)};
+    print qq{<line x1="$x" y1="$y" x2="$x" y2="$plot->{drawTop}" $params ><title>$title</title></line>};
+    print qq{<line x1="$x" y1="$y" x2="$plot->{drawRight}" y2="$y" $params ><title>$title</title></line>};
+    print qq{<text x="$plot->{drawRight}" y="$y" text-anchor="end" dominant-baseline="bottom" fill="blue"><title>$title</title>'optimal'</text>};
+  }
+  print
+    $plot->axes(),
+    $plot->axisTicks("x", \@ticks),
+    $plot->axisTicks("y", \@ticks),
+    $plot->marginText("Score ratios in each genome", "top",
+                      title => "For each genome with a homolog of either gene, the score ratios (bits/max) for the best hits",
+                      style => "font-size: larger; font-weight: bold;"),
+    $plot->marginText("Score ratio for gene 1", "bottom",
+                      title => "Score (bits) of best homolog of gene 1 / max ($max1 bits)"),
+    $plot->marginText("Score ratio for gene 2", "left",
+                      title => "Score (bits) of best homolog of gene 2 / max ($max2 bits)");
+
+  # legend for color-coding, at top
+  my $top = $plot->{drawTop} + $plot->{lineSize};
+  my $x1 = $plot->convertX(0) + $plot->{lineSize} * 0.5;
+  print qq{<text x="$x1" y="$top" dominant-baseline="bottom" text-anchor="left"><tspan stroke="green"><title>Within $closeKb kb and on the same strand</title>close</tspan> or not</text>};
+  print "\n";
+
+  # points, with random moderately-negative value instead of 0
+  srand(01312023);
+  foreach my $v (reverse @gidValues) {
+    my $gid = $v->{gid};
+    my $genome = $genomes->{$gid};
+    my $x = $v->{ratio1};
+    $x = -$below/10 - rand(0.8*$below) if $x == 0;
+    my $y = $v->{ratio2};
+    $y = -$below/10 - rand(0.8*$below) if $y == 0;
+    my @locusTags = ();
+    push @locusTags, $byg1{$gid}{locusTag} if exists $byg1{$gid};
+    push @locusTags, $byg2{$gid}{locusTag} if exists $byg2{$gid};
+    my $lineage = join(" ",
+                       $genome->{gtdbPhylum}, $genome->{gtdbClass}, $genome->{gtdbOrder},
+                       $genome->{gtdbFamily});
+    print $plot->point($x, $y,
+                       size => 2.5,
+                       color => $v->{close} ? "green" : "black",
+                       fill => $v->{close} ? "green" : "none",
+                       URL => "genes.cgi?" .  join("&", map "g=$_", @locusTags),
+                       title => join(" and ", @locusTags)
+                       . " in " . $genome->{gtdbSpecies}
+                       . " ($lineage)"), "\n";
+  }
+  print $plot->end();
 }
+print "</TD></TR></TABLE>";
 
 my $seqDesc2e = encode_entities($seqDesc2);
 my $downloadURL = join("&",
