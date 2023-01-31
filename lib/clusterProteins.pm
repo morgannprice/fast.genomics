@@ -125,7 +125,7 @@ sub proteinsToSimilarity {
   my $cmd;
   $cmd = "$lastdb -p $tmpLast $tmpFaa";
   system($cmd) == 0 || die "$cmd -- failed: $!";
-  $cmd = "$lastal -P 2 $tmpLast $tmpFaa > $tmpLast.out";
+  $cmd = "$lastal -P 6 $tmpLast $tmpFaa > $tmpLast.out";
   system($cmd) == 0 || die "$cmd -- failed: $!";
   open(my $fhHits, "<", "$tmpLast.out") || die "Cannot read $tmpLast.out";
   my $hits = parseLast($fhHits);
