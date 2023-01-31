@@ -23,6 +23,7 @@ print
   $plot->marginText("y label", "left", title => "Hover text"),
   $plot->point(30,100, title => "title", URL => "search.cgi", color => "red"),
   $plot->point(0,0),
-  $plot->point(100,100);
+  $plot->point(100,100),
+  $plot->end();
 
 finish_page();
