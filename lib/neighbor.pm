@@ -5,7 +5,7 @@ use strict;
 
 our (@ISA,@EXPORT);
 @ISA = qw(Exporter);
-@EXPORT = qw(parseTaxString readMMSeqsHits estimateTopScore);
+@EXPORT = qw(parseTaxString readMMSeqsHits estimateTopScore cumsum);
 
 # Returns a hash of d/p/c/o/f/g/s to value
 # (any of which could be missing),
@@ -66,3 +66,14 @@ sub estimateTopScore($$) {
 }
 1;
 
+# cumulative sum
+sub cumsum {
+  my (@in) = @_;
+  my @out = ();
+  my $tot = 0;
+  for (my $i = 0; $i < scalar(@in); $i++) {
+    $tot += $in[$i];
+    $out[$i] = $tot;
+  }
+  return @out;
+}
