@@ -11,6 +11,7 @@ use List::Util qw{min max};
 use lib "../lib";
 use neighbor;
 use genesSvg;
+use binom qw{hyperLogProbTail};
 # neighborWeb.pm relies on various PaperBLAST libraries
 use lib "../../PaperBLAST/lib";
 use neighborWeb;
@@ -41,8 +42,11 @@ if ($tsv) {
 else {
   print h3("First gene");
   if ($gene) {
+    my $genome = gidToGenome($gene->{gid});
     print p(a({-href => "gene.cgi?$options"}, $gene->{locusTag}) . ":",
-            encode_entities($gene->{desc}));
+            encode_entities($gene->{desc}),
+            br(),
+            "from", i($genome->{gtdbSpecies}), encode_entities($genome->{strain}));
   } else {
     print p(a({-href => "seq.cgi?$options"}, encode_entities($seqDesc)));
   }
@@ -129,8 +133,11 @@ if ($tsv) {
   die "Second gene is not protein-coding\n" unless $seq2;
 } else {
   if ($gene2) {
+    my $genome = gidToGenome($gene2->{gid});
     print p(a({-href => "gene.cgi?$options2"}, $gene2->{locusTag}) . ":",
-            encode_entities($gene2->{desc}));
+            encode_entities($gene2->{desc}),
+            br(),
+            "from", i($genome->{gtdbSpecies}), encode_entities($genome->{strain}));
   } else {
     print p(a({-href => "seq.cgi?$options2"}, encode_entities($seqDesc2)));
   }
@@ -158,7 +165,6 @@ if ($tsv) {
 }
 
 # Compare hits1 and hits2
-print h3("Homologs"), "\n" unless $tsv;
 my $geneHits1 = hitsToGenes($hits1);
 my $max1 = estimateTopScore($geneHits1->[0], $seq);
 my $geneHits2 = hitsToGenes($hits2);
@@ -179,6 +185,14 @@ foreach my $hit (@$geneHits2) {
   $byg2{$gid} = $hit unless exists $byg2{$gid};
 }
 
+# Compute ranks
+foreach my $i (0..(scalar(@$geneHits1)-1)) {
+  $geneHits1->[$i]{rank} = $i+1;
+}
+foreach my $i (0..(scalar(@$geneHits2)-1)) {
+  $geneHits2->[$i]{rank} = $i+1;
+}
+
 # For each genome that contains a hit to either,
 # the two scores, whether they are nearby, whether they are the same gene
 my %genomeList = ();
@@ -188,6 +202,10 @@ foreach my $gid (keys %byg1) {
 foreach my $gid (keys %byg2) {
   $genomeList{$gid} = [];
 }
+
+my $genomes = getDbHandle()->selectall_hashref("SELECT * FROM Genome", "gid", { Slice => {} });
+my $nGenomes = scalar(keys %$genomes);
+
 my $closeKb = 5;
 my $closeNt = $closeKb * 1000;
 # gid with a hit for either geonme to hash of
@@ -206,29 +224,35 @@ foreach my $gid (keys %genomeList) {
   $gidScores{$gid} = { 'gid' => $gid,
                        'inBoth' => $inBoth, 'same' => $sameGene, 'close' => $close,
                        'ratio1' => defined $hit1 ? $hit1->{bits} / $max1 : 0,
-                       'ratio2' => defined $hit2 ? $hit2->{bits} / $max2 : 0 };
+                       'ratio2' => defined $hit2 ? $hit2->{bits} / $max2 : 0,
+                       'rank1' => defined $hit1 ? $hit1->{rank} : "",
+                       'rank2' => defined $hit2 ? $hit2->{rank} : "",
+                       'order' => min(defined $hit1 ? $hit1->{rank} : 2*$nGenomes,
+                                      defined $hit2 ? $hit2->{rank} : 2*$nGenomes) };
 }
 
-my $genomes = getDbHandle()->selectall_hashref("SELECT * FROM Genome", "gid", { Slice => {} });
+# Sort by the better rank
+my @gidValues = sort { $a->{order} <=> $b->{order} } values %gidScores;
 if ($tsv) {
-  my @gids = sort { $b->{ratio1} + $b->{ratio2} <=> $a->{ratio1} + $a->{ratio2} } values %gidScores;
   my @genomeFields = qw{gtdbDomain gtdbPhylum gtdbClass gtdbOrder gtdbFamily
                         gtdbGenus gtdbSpecies strain};
   print join("\t", "assemblyId",
              @genomeFields,
              "locusTag1", "locusTag2",
+             "rank1", "rank2",
              "bits1", "bits2",
              "ratio1", "ratio2",
              "identity1", "identity2",
              "alnLength1", "alnLength2",
              "close")."\n";
-  foreach my $row (@gids) {
+  foreach my $row (@gidValues) {
     my $gid = $row->{gid};
     my $tag1 = $byg1{$gid}{locusTag} || "";
     my $tag2 = $byg2{$gid}{locusTag} || "";
     my @genomeOut = map $genomes->{$gid}{$_}, @genomeFields;
     print join("\t", $gid, @genomeOut,
                $tag1, $tag2,
+               $row->{rank1}, $row->{rank2},
                $byg1{$gid}{bits} || "", $byg2{$gid}{bits} || "",
                $row->{ratio1}, $row->{ratio2},
                $byg1{$gid}{identity} || "", $byg2{$gid}{identity} || "",
@@ -240,39 +264,104 @@ if ($tsv) {
 
 #else HTML report
 
-my $nInBoth = scalar(grep $_->{inBoth}, values %gidScores);
-my $n1 = scalar(grep $_->{ratio1} > 0, values %gidScores);
-my $n2 = scalar(grep $_->{ratio2} > 0, values %gidScores);
-my $nClose = scalar(grep $_->{close}, values %gidScores);
-my $nSame = scalar(grep $_->{same}, values %gidScores);
+my $nInBoth = scalar(grep $_->{inBoth}, @gidValues);
+my $n1 = scalar(grep $_->{ratio1} > 0, @gidValues);
+my $n2 = scalar(grep $_->{ratio2} > 0, @gidValues);
+my $nClose = scalar(grep $_->{close}, @gidValues);
+my $nSame = scalar(grep $_->{same}, @gidValues);
 
-my $n1good = scalar(grep $_->{ratio1} >= 0.3, values %gidScores);
-my $n2good = scalar(grep $_->{ratio2} >= 0.3, values %gidScores);
+my $n1good = scalar(grep $_->{ratio1} >= 0.3, @gidValues);
+my $n2good = scalar(grep $_->{ratio2} >= 0.3, @gidValues);
 
-my @good = grep $_->{ratio1} >= 0.3 && $_->{ratio2} >= 0.3, values %gidScores;
+my @good = grep $_->{ratio1} >= 0.3 && $_->{ratio2} >= 0.3, @gidValues;
 my $nGoodBoth = scalar(@good);
 my $nGoodClose = scalar(grep $_->{close}, @good);
 my $nGoodSame = scalar(grep $_->{same}, @good);
 
-my $nGenomes = scalar(%$genomes);
-my $nBothExpect = $nSame == $nGenomes ? $nGenomes
+my $nInBothExpected = $nSame == $nGenomes ? $nGenomes
   : $nSame + (($n1-$nSame) * ($n2-$nSame))/($nGenomes-$nSame);
-my $nExpectGood = $nGoodSame == $nGenomes ? $nGenomes
+my $nGoodBothE = $nGoodSame == $nGenomes ? $nGenomes
   : $nGoodSame + (($n1good - $nGoodSame) * ($n2good - $nGoodSame))/($nGenomes-$nGoodSame);
 
 print
-  p("Found hits in", commify($n1), "and", commify($n2), "genomes, respectively.",
+  h3("Co-occurence of Homologs"),
+  p("Found homologs in", commify($n1), "and", commify($n2), "genomes, respectively.",
     "$nInBoth genomes contain homologs of both genes (versus",
-    commify(int($nBothExpect+0.5)), "expected)."),
+    commify(int($nInBothExpected+0.5)), "expected)."),
   p("Considering only the best hit in each genome,",
-        "$nClose hits are nearby (within 5 kb) and on the same strand, and $nSame are to the same gene."),
-  p("Found good hits (above 30% of maximum bit score) in",
+        "$nClose hits are nearby (within $closeKb kb) and on the same strand, and $nSame are to the same gene."),
+  h3("Co-occurence of Good Homologs"),
+  p("Found good homologs (above 30% of maximum bit score) in",
     commify($n1good), "and", commify($n2good), "genomes, respectively.",
     "$nGoodBoth genomes contain good homologs of both genes (versus",
-    commify(int($nExpectGood+0.5)), "expected)."),
+    commify(int($nGoodBothE+0.5)), "expected)."),
   p("Among the best hits in those $nGoodBoth genomes,",
-    "$nGoodClose are nearby (within 5 kb) and on the same strand, and $nGoodSame are to the same gene.");
+    "$nGoodClose are nearby (within $closeKb kb) and on the same strand, and $nGoodSame are to the same gene.");
 
+# Find the most significant threshold (if any)
+# for the enrichment of the two being in the same genome
+if ($nInBoth > $nSame + 1) {
+  my @gidsLeft = map $_->{gid}, grep ! $_->{same}, @gidValues;
+  my $nGenomesLeft = $nGenomes - $nSame;
+
+  # Sort the remaining hits by score, and, as we go, keep track of how many
+  # are in the same genome
+  my @gids1 = grep exists $byg1{$_}, @gidsLeft;
+  # Break ties on bits by evalue (mmseqs rounds the bit scores)
+  @gids1 = sort { $byg1{$b}{bits} <=> $byg1{$a}{bits}
+                    || $byg1{$a}{eValue} <=> $byg1{$b}{eValue} } @gids1;
+  my @gids2 = grep exists $byg2{$_}, @gidsLeft;
+  @gids2 = sort { $byg2{$b}{bits} <=> $byg2{$a}{bits}
+                    || $byg2{$a}{eValue} <=> $byg2{$b}{eValue} } @gids2;
+
+
+  my $n = min(scalar(@gids1), scalar(@gids2));
+  my %in1 = ();
+  my %in2 = ();
+  my %inBoth = ();
+  my @logP = ();
+  for (my $i = 0; $i < $n; $i++) {
+    my $gid1 = $gids1[$i];
+    my $gid2 = $gids2[$i];
+    $in1{$gid1} = 1;
+    $in2{$gid2} = 1;
+    foreach my $gid ($gid1, $gid2) {
+      $inBoth{$gid} = 1 if $in1{$gid} && $in2{$gid};
+    }
+    # log(P) according to a 1-sided fisher exact test on more-extreme contingency tables
+    # is the same as the hypergeometric distribution where we fix top hits for genome 1 as being 
+    # present in nTop genomes and absent from nGenomesLeft-nTop genomes;
+    # then choose nTop genomes (representing those with genome2), and
+    # how often do nBoth or more of those have genome1
+    my $nTop = $i+1;
+    $logP[$i] = hyperLogProbTail(scalar(keys %inBoth), $nTop, $nGenomesLeft-$nTop, $nTop);
+  }
+  my $bestLogP = min(@logP);
+  my ($bestI) = grep $logP[$_] == $bestLogP, (0..($n-1));
+  my $correctedLog10P = ($bestLogP + log($n)) / log(10);
+  print h3("Strongest Threshold for Co-occurence");
+  if ($correctedLog10P < -2) {
+    my %gidsThresh1 = map { $_ => 1 } @gids1[0..$bestI];
+    my %gidsThresh2 = map { $_ => 1 } @gids2[0..$bestI];
+    my @gidsThresh = grep exists $gidsThresh2{$_}, keys %gidsThresh1;
+    my $nCloseThresh = scalar(grep $gidScores{$_}{close}, @gidsThresh);
+    my $thresh1 = $byg1{ $gids1[$bestI] }{bits};
+    my $f1 = int(0.5 + 100 * $thresh1/$max1);
+    my $thresh2 = $byg2{ $gids2[$bestI] }{bits};
+    my $f2 = int(0.5 + 100 * $thresh2/$max2);
+    my $fClose = int(0.5 + 100 * $nCloseThresh/scalar(@gidsThresh));
+    print p("The strongest statistical signal of co-occurence is for the top",
+            commify($bestI+1), "homologs of each gene, which co-occur in",
+            commify(scalar(@gidsThresh)), "genomes,",
+            "P = 10<sup>" . sprintf("%.1f", $correctedLog10P) . "</sup>",
+            "(Fisher's exact test, 1-sided, with Bonferonni correction).",
+            "The corresponding bit score thresholds are $thresh1 ($f1% of max)",
+            " and $thresh2 ($f2% of max), respectively.",
+           "$nCloseThresh of these co-occuring homologs ($fClose%) are nearby (within $closeKb kb and on the same strand).");
+  } else {
+    print p("No significant co-occurence");
+  }
+}
 
 my $seqDesc2e = encode_entities($seqDesc2);
 my $downloadURL = join("&",
@@ -280,7 +369,9 @@ my $downloadURL = join("&",
                        (defined $gene2 ? "locus2=$gene2->{locusTag}"
                         : "seqDesc2=$seqDesc2e&seq2=$seq2"),
                        "format=tsv");
-print p("Download",
+print
+  h3("Download"),
+  p("Download a",
         a({ -href => $downloadURL }, "table"),
         "(tab-delimited)",
        "of the best homolog(s) in each genome");
