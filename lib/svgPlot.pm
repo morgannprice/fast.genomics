@@ -190,10 +190,11 @@ sub point {
   my $y = $self->convertY($yIn);
   my $size = $options{size} || 2;
   my $color = $options{color} || "black";
-  my $out = qq{<circle cx="$x" cy="$y" r="$size" stroke="$color" fill="none"};
+  my $fill = $options{fill} || "none";
+  my $out = qq{<circle cx="$x" cy="$y" r="$size" stroke="$color" fill="$fill"};
   my $style = $options{style};
   $out .= qq{ style="$style"} if defined $style && $style ne "";
-  $out .= "/>";
+  $out .= ">";
   my $title = $options{title};
   if (defined $title && $title ne "") {
     $out .= "<TITLE>" . encode_entities($title) . "</TITLE>";
