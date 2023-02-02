@@ -287,19 +287,21 @@ my $nGoodBothE = $nGoodSame == $nGenomes ? $nGenomes
 # with 1 row and 2 columns
 print
   qq{<TABLE cellpadding=2 cellspacing=2><TR><TD valign="top">},
-  h4("Co-occurence of Homologs"),
+  h4("Co-occurence: all homologs"),
   p("Found homologs in", commify($n1), "and", commify($n2), "genomes, respectively.",
     "$nInBoth genomes contain homologs of both genes (versus",
     commify(int($nInBothExpected+0.5)), "expected)."),
   p("Considering only the best hit in each genome,",
         "$nClose hits are nearby (within $closeKb kb) and on the same strand, and $nSame are to the same gene."),
-  h4("Co-occurence of Good Homologs"),
+  h4("Co-occurence: good homologs"),
   p("Found good homologs (above 30% of maximum bit score) in",
     commify($n1good), "and", commify($n2good), "genomes, respectively.",
     "$nGoodBoth genomes contain good homologs of both genes (versus",
-    commify(int($nGoodBothE+0.5)), "expected)."),
+    commify(int($nGoodBothE+0.5)), "expected).");
+print
   p("Among the best hits in those $nGoodBoth genomes,",
-    "$nGoodClose are nearby (within $closeKb kb) and on the same strand, and $nGoodSame are to the same gene.");
+    "$nGoodClose are nearby (within $closeKb kb) and on the same strand, and $nGoodSame are to the same gene.")
+  if $nGoodBoth > 0;
 
 # Find the most significant threshold (if any)
 # for the enrichment of the two being in the same genome,
@@ -343,7 +345,7 @@ if ($nInBoth > $nSame + 1) {
   my $bestLogP = min(@logP);
   my ($bestI) = grep $logP[$_] == $bestLogP, (0..($n-1));
   my $correctedLog10P = ($bestLogP + log($n)) / log(10);
-  print h4("Optimal Threshold for Co-occurence");
+  print h4("Co-occurrence: optimal threshold");
   my ($thresh1,$thresh2);
   if ($correctedLog10P < -3) {
     my %gidsThresh1 = map { $_ => 1 } @gids1[0..$bestI];
@@ -392,7 +394,7 @@ if ($nInBoth > $nSame + 1) {
     my $x = $plot->convertX(0.3);
     my $y = $plot->convertY(0.3);
     my $params = qq{ stroke="orange" stroke-dasharray="4" };
-    my $title = qq{The "good" threshold (both score ratios >= 0.3)};
+    my $title = qq{The 'good' threshold (both score ratios >= 0.3)};
     print qq{<line x1="$x" y1="$y" x2="$x" y2="$plot->{drawTop}" $params ><title>$title</title></line>};
     print qq{<line x1="$x" y1="$y" x2="$plot->{drawRight}" y2="$y" $params ><title>$title</title></line>};
     print qq{<text x="$plot->{drawRight}" y="$y" text-anchor="end" dominant-baseline="bottom" fill="orange"><title>$title</title>good</text>};
@@ -404,8 +406,10 @@ if ($nInBoth > $nSame + 1) {
     my $title = qq{The 'optimal' threshold, from maximizing -log(P)};
     print qq{<line x1="$x" y1="$y" x2="$x" y2="$plot->{drawTop}" $params ><title>$title</title></line>};
     print qq{<line x1="$x" y1="$y" x2="$plot->{drawRight}" y2="$y" $params ><title>$title</title></line>};
-    print qq{<text x="$plot->{drawRight}" y="$y" text-anchor="end" dominant-baseline="bottom" fill="blue"><title>$title</title>'optimal'</text>};
+    print qq{<text x="$plot->{drawRight}" y="$y" text-anchor="end" dominant-baseline="bottom" fill="blue"><title>$title</title>optimal</text>};
   }
+  my $max1Show = int(0.5 + $max1);
+  my $max2Show = int(0.5 + $max2);
   print
     $plot->axes(),
     $plot->axisTicks("x", \@ticks),
@@ -414,14 +418,14 @@ if ($nInBoth > $nSame + 1) {
                       title => "For each genome with a homolog of either gene, the score ratios (bits/max) for the best hits",
                       style => "font-size: larger; font-weight: bold;"),
     $plot->marginText("Score ratio for gene 1", "bottom",
-                      title => "Score (bits) of best homolog of gene 1 / max ($max1 bits)"),
+                      title => "Score (bits) of best homolog of gene 1 / max ($max1Show bits)"),
     $plot->marginText("Score ratio for gene 2", "left",
-                      title => "Score (bits) of best homolog of gene 2 / max ($max2 bits)");
+                      title => "Score (bits) of best homolog of gene 2 / max ($max2Show bits)");
 
   # legend for color-coding, at top
   my $top = $plot->{drawTop} + $plot->{lineSize};
   my $x1 = $plot->convertX(0) + $plot->{lineSize} * 0.5;
-  print qq{<text x="$x1" y="$top" dominant-baseline="bottom" text-anchor="left"><tspan stroke="green"><title>Within $closeKb kb and on the same strand</title>close</tspan> or not</text>};
+  print qq{<text x="$x1" y="$top" dominant-baseline="bottom" text-anchor="left"><tspan fill="green"><title>Within $closeKb kb and on the same strand</title>close</tspan> or not</text>};
   print "\n";
 
   # points, with random moderately-negative value instead of 0

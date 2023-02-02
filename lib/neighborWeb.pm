@@ -269,12 +269,12 @@ sub hitsToRandomGenes($$$) {
 sub TopDivHtml($$) {
   my ($banner, $URL) = @_;
   return <<END
-<div style="background-color: #40C0CB; display: block; position: absolute; top: 0px; left: -1px;
-  width: 100%; padding: 0.25em; z-index: 400;">
-<H2 style="margin: 0em;">
-<A HREF="$URL" style="color: grey90; font-family: 'Montserrat', sans-serif; text-decoration: none;">
+<div style="background-color: lightgreen; display: block; position: absolute; left:-1px; top:0px;
+  width: 100%; padding: 0em; z-index: 400;">
+<P style="margin: 0.1em; margin-left: 0.4em; font-size: 160%;">
+<A HREF="$URL" style="color: #660066; font-family: 'Montserrat', sans-serif; text-decoration: none;">
 $banner
-</A></H2></div>
+</A></P></div>
 <P style="margin: 0em;">&nbsp;</P>
 END
 ;
@@ -291,8 +291,9 @@ sub start_page {
   print
     CGI::header(-charset => 'utf-8'),
     CGI::start_html(-head => CGI::Link({-rel => "shortcut icon", -href => "../static/favicon.ico"}),
-               -title => $title eq "" ? "fast.genomics" : "fast.genomics $title"),
+               -title => $title eq "" ? "fast.genomics" : "fast.genomics: $title"),
     TopDivHtml($banner, $bannerURL),
+    pbweb::GetMotd(),
     $title ? CGI::h2($title) : "",
     "\n";
 }
