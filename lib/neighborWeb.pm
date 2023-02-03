@@ -129,6 +129,12 @@ sub parseGeneQuery($) {
     # first, look in the SQL database
     my $gene = locusTagToGene($query);
     return ('genes' => [$gene]) if defined $gene;
+
+    # or in the protein table
+    my $genes = $dbh->selectall_arrayref("SELECT * from Gene WHERE proteinId = ?",
+                                         { Slice => {} }, $query);
+    return ('genes' => $genes) if @$genes > 0;
+
     #else
     # Check MicrobesOnline and fitness browser first because they are fast
     # Check pdb next because it is very specific about which identifiers to look for
