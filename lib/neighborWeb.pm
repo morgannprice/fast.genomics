@@ -151,6 +151,8 @@ sub parseGeneQuery($) {
     my $seqDesc = $header;
     $seqDesc =~ s/^>//;
     my $seq = join("", @lines);
+    $seq =~ s/\r//g; # sometimes present due to cut/paste
+    $seq =~ s/\s*$//;
     return ('seq' => $seq, 'seqDesc' => $seqDesc);
   }
 
