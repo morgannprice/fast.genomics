@@ -58,18 +58,33 @@ if (defined $query{genes}) {
   my $genes = $query{genes};
   # show table of genes
   my $gid = $genes->[0]{gid};
-  my $genome = gidToGenome($gid) || die $gid;
-  die $gid unless $genome;
-  print p("Found", scalar(@$genes), " matches in $genome->{gtdbSpecies} $genome->{strain} ($genome->{gid})");
-  foreach my $gene (@$genes) {
-    my $locusTag = $gene->{locusTag};
-    print p(a({href => "gene.cgi?locus=$locusTag"}, $locusTag),
-            $gene->{proteinId}, $gene->{desc});
+  my @gids = map $_->{gid}, @$genes;
+  my %gid = map { $_ => 1 } @gids;
+  if (scalar(keys %gid) == 1) {
+    my $genome = gidToGenome($gid) || die $gid;
+    die $gid unless $genome;
+    print p("Found", scalar(@$genes), " matches in $genome->{gtdbSpecies} $genome->{strain} ($genome->{gid})");
+    foreach my $gene (@$genes) {
+      my $locusTag = $gene->{locusTag};
+      print p(a({href => "gene.cgi?locus=$locusTag"}, $locusTag),
+              $gene->{proteinId}, $gene->{desc});
+    }
+    my $query2 = $query; $query2 =~ s/^\S+\s+//; $query2 =~ s/\s+$//;
+    my $curatedURL = "https://papers.genomics.lbl.gov/cgi-bin/genomeSearch.cgi?gdb=NCBI"
+      . "&gid=${gid}&query=" . uri_escape($query2);
+    print p("Or search for", encode_entities($query2),
+            "in $genome->{gtdbSpecies} $genome->{strain} using",
+            a({-href =>  $curatedURL }, "Curated BLAST"));
+  } else {
+    print p("Found", scalar(@$genes), " matches");
+    foreach my $gene (@$genes) {
+      my $locusTag = $gene->{locusTag};
+      my $genome = gidToGenome($gene->{gid}) || die $gid;
+      print p(a({href => "gene.cgi?locus=$locusTag"}, $locusTag),
+              $gene->{proteinId}, $gene->{desc},
+              "from", i($genome->{gtdbSpecies}), $genome->{strain}, small("(".$genome->{gid}.")"));
+    }
   }
-  my $query2 = $query; $query2 =~ s/^\S+\s+//;
-  my $curatedURL = "https://papers.genomics.lbl.gov/cgi-bin/genomeSearch.cgi?gdb=NCBI"
-    . "&gid=${gid}&query=" . uri_escape($query2);
-  print p("Or search for", encode_entities($query2), "in $genome->{gtdbSpecies} $genome->{strain} using", a({-href =>  $curatedURL }, "Curated BLAST"));
   finish_page();
 }
 
@@ -81,7 +96,7 @@ $seq =~ m/^[a-zA-Z]+$/ || die("Sorry, input sequence has invalid characters");
 my $seqDesc = $query{seqDesc}
   || length($seq) . " a.a. beginning with " . substr($seq, 0, 10);
 
-print p("Found", encode_entities($seqDesc));
+print p("Sequence name:", encode_entities($seqDesc));
 print showSequence($seqDesc, $seq);
 
 my $seqDescE = uri_escape($seqDesc);
