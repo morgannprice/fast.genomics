@@ -486,6 +486,7 @@ sub clusterGenes {
     close($fh) || die "Error reading $clusterFile";
   } else {
     my %proteinSeq = ();
+    print qq{<P id="ClusterInfo">Clustering the proteins for coloring...</P>}, "\n";
     foreach my $proteinId (keys %proteinToGenes) {
       my ($seq) = $dbh->selectrow_array("SELECT sequence FROM Protein WHERE proteinId = ?",
                                         {}, $proteinId);
@@ -506,6 +507,7 @@ sub clusterGenes {
     }
     close($fh) || die "Error writing to $tmpFile";
     rename($tmpFile, $clusterFile) || die "rename $tmpFile to $clusterFile failed";
+    print qq{<SCRIPT>document.getElementById("ClusterInfo").innerHTML = "";</SCRIPT>}, "\n";
   }
 
   # convert protein clusters to gene clusters

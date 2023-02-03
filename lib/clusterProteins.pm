@@ -137,10 +137,6 @@ sub proteinsToSimilarity($$) {
   $cmd = "$lastdb -p $tmpLast $tmpFaa";
   system($cmd) == 0 || die "$cmd -- failed: $!";
   $cmd = "$lastal -P 6 $tmpLast $tmpFaa > $tmpLast.out";
-  print
-    "<P>Running LAST to cluster the proteins",
-    runTimerHTML(),
-    "</P>", "\n";
   runWhileCommenting($cmd) == 0 || die "$cmd -- failed: $!";
   open(my $fhHits, "<", "$tmpLast.out") || die "Cannot read $tmpLast.out";
   my $hits = parseLast($fhHits, $fast);
