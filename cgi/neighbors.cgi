@@ -29,7 +29,7 @@ $n = 50 unless defined $n && $n =~ m/^\d+$/;
 $n = 200 if $n > 200;
 my $kbShown = $cgi->param('kb') || 6;
 die "Invalid kb" unless $kbShown =~ m/^\d+/;
-$kbShown = min(25, max(2, $kbShown));
+$kbShown = min(40, max(2, $kbShown));
 my $ntShown = $kbShown * 1000;
 my $kbWidth = int(0.5 + 150 / ($kbShown/6));
 my $hitType = $cgi->param('hitType') || 'top';
@@ -110,7 +110,7 @@ print
                             'random' => 'random good hits' },
                -default => $hitType),
     "&nbsp;",
-    'Kilobases:', popup_menu(-name => 'kb', -values => [6, 9, 12, 18, 25], -default => $kbShown),
+    'Kilobases:', popup_menu(-name => 'kb', -values => [6, 9, 12, 18, 25, 40], -default => $kbShown),
     "&nbsp;",
     submit('Change')),
   end_form;
