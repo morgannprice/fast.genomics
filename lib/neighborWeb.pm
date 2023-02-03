@@ -12,7 +12,8 @@ use HTML::Entities;
 
 # from the PaperBLAST code base
 use pbweb qw{GetMotd commify
-             VIMSSToFasta RefSeqToFasta UniProtToFasta FBrowseToFasta pdbToFasta};
+             VIMSSToFasta RefSeqToFasta UniProtToFasta FBrowseToFasta pdbToFasta
+             runTimerHTML runWhileCommenting};
 use pbutils qw{NewerThan};
 use neighbor;
 use clusterProteins;
@@ -86,8 +87,9 @@ sub getMMSeqsHits($) {
                "--threads", 1,
                "--db-load-mode", 2,
                ">", "$tmpOut.log");
-    print CGI::p("Searching for similar proteins with mmseqs2..."), "\n";
-    system(join(" ",@cmd)) == 0
+    print CGI::p("Searching for similar proteins with mmseqs2",
+                 CGI::small(runTimerHTML())), "\n";
+    runWhileCommenting(join(" ", @cmd)) == 0
       || die "Error running @cmd -- $!";
     rename($tmpOut, $hitsFile) || die "Renaming $tmpOut to $hitsFile failed";
     unlink($faaFile);
@@ -469,7 +471,8 @@ sub clusterGenes {
   my $n = scalar(@proteinIds);
   my $clusterFile = "../tmp/hits/${n}_${md5}.cluster";
   my @proteinClusters;
-  if (-e $clusterFile) {
+  # RECLUSTER environment variable is for testing
+  if (-e $clusterFile && ! $ENV{RECLUSTER}) {
     open (my $fh, "<", $clusterFile) || die "Cannot read $clusterFile";
     while (my $line = <$fh>) {
       chomp $line;
@@ -489,7 +492,6 @@ sub clusterGenes {
       die "Unknown proteinId $proteinId" unless $seq;
       $proteinSeq{$proteinId} = $seq;
     }
-    print CGI::p("Running LAST to cluster and color the proteins...")."\n";
     @proteinClusters = @{ clusterProteins(\%proteinSeq, 0.5) };
     foreach my $proteinCluster (@proteinClusters) {
       foreach my $proteinId (@$proteinCluster) {
