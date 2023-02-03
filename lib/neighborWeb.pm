@@ -346,7 +346,7 @@ sub formatFastaHtml($$) {
                    join(CGI::br(), ">".encode_entities($seqDesc), @seqPieces));
 }
 
-# Assumes that genes are not too enormous; fetches ~40 kb on each side
+# Assumes that genes are not too enormous; fetches ~50 kb on each side
 # Returns a reference to a list of rows from the Gene table
 sub getNearbyGenes($) {
   my ($gene) = @_;
@@ -354,7 +354,7 @@ sub getNearbyGenes($) {
   return getDbHandle()->selectall_arrayref(
     qq[ SELECT * FROM Gene WHERE gid = ? AND scaffoldId = ? AND begin >= ? AND end <= ? ORDER BY begin ],
     { Slice => {} },
-    $gene->{gid}, $gene->{scaffoldId}, $mid - 40*1000, $mid + 40*1000);
+    $gene->{gid}, $gene->{scaffoldId}, $mid - 50*1000, $mid + 50*1000);
 }
 
 # returns a list of HTML strings
