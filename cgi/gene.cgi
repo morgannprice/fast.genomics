@@ -12,6 +12,7 @@ use neighbor;
 # neighborWeb.pm relies on various PaperBLAST libraries
 use lib "../../PaperBLAST/lib";
 use neighborWeb;
+use pbweb qw{commify};
 
 # CGI arguments:
 # locus -- a locus tag in the database (with correct capitalization)
@@ -53,13 +54,15 @@ if ($gene->{proteinId} ne "") {
   push @lines, "Protein: " .
     a({-href => "https://www.ncbi.nlm.nih.gov/protein/$pId",
        -title => "$pId at NCBI"}, $pId)
-    . " (" . length($seq) . " amino acids)";
+    . " (" . commify(length($seq)) . " amino acids)";
 }
 my $center = int(($gene->{begin} + $gene->{end})/2);
-my $showBegin =  max(1, min($gene->{begin} - 1000, $center - 4000));
-my $showEnd = max($gene->{end} + 1000, $center + 4000);
-my $showBegin2 =  max(1, min($gene->{begin} - 1000, $center - 8000));
-my $showEnd2 = max($gene->{end} + 1000, $center + 8000);
+# Nearby genes shown in the graphic or in the NCBI link
+my $showBegin =  max(1, min($gene->{begin} - 2000, $center - 4000));
+my $showEnd = max($gene->{end} + 2000, $center + 4000);
+# Nearby genes shown in the linked-to table
+my $showBegin2 =  max(1, min($gene->{begin} - 2000, $center - 8000));
+my $showEnd2 = max($gene->{end} + 2000, $center + 8000);
 my $ncbiBrowser = "https://www.ncbi.nlm.nih.gov/nuccore/$gene->{scaffoldId}?report=graph"
                  . "&from=$showBegin&to=$showEnd";
 push @lines, "Location: " . $gene->{scaffoldId} . " "
@@ -79,7 +82,10 @@ foreach my $s (@showGenes) {
   $s->{color} = $s->{locusTag} eq $gene->{locusTag} ? $focalColor : "lightgrey";
 }
 
+my $showWidth = $showEnd - $showBegin + 1;
+my $kbWidth = $showWidth < 9*1000  ?  150 : 150/($showWidth/9000);
 my %genesSvg = genesSvg(\@showGenes,
+                        'kbWidth' => $kbWidth,
                         'begin' => $showBegin, 'end' => $showEnd,
                         'yTop' => 5,
                         'showLabel' => 1);
@@ -116,7 +122,9 @@ if (defined $seq) {
     print p(a{ -href => "findHomologs.cgi?locus=$locusTag" }, "Find homologs with mmseqs2",
             "(fast)");
   }
+  print showSequence($locusTag . " " . $gene->{desc}, $seq);
 }
+
 print "\n";
 
 # Genes as table -- maybe another page ?
