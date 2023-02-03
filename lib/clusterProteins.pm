@@ -8,6 +8,8 @@ require Exporter;
 use strict;
 use Digest::MD5 qw{md5_hex};
 use FindBin qw{$RealBin};
+use lib "../../web";
+use pbweb qw{runWhileCommenting runTimerHTML};
 
 our (@ISA,@EXPORT);
 @ISA = qw(Exporter);
@@ -18,8 +20,10 @@ our (@ISA,@EXPORT);
 # match, alnLen, and (fraction) identity.
 # All coordinates are 1-based.
 # Only protein alignments are supported.
-sub parseLast($) {
-  my ($fh) = @_;
+# If the second argument is fast, the identity and match values will be empty
+#   (this is much faster)
+sub parseLast($$) {
+  my ($fh, $fast) = @_;
   my $scoreLine = undef;
   my @alnLines = ();
   my @out = ();
@@ -70,18 +74,25 @@ sub parseLast($) {
         my $nMatch = 0;
         my $nGapOpen = 0;
         my $nMismatch = 0;
-        my @qPos = split //, $qAln;
-        my @sPos = split //, $sAln;
-        for (my $i = 0; $i < length($qAln); $i++) {
-          if ($qPos[$i] eq $sPos[$i]) {
-            $nMatch++;
-          } elsif ($qPos[$i] ne "-" && $sPos[$i] ne "-") {
-            $nMismatch++;
-          } elsif ($qPos[$i] eq "-" || $sPos[$i] eq "-") {
-            $nGapOpen++ if $i == 0 || ($qPos[$i-1] ne "-" && $sPos[$i-1] ne "-");
+        my $identity = "";
+        if ($fast) {
+          $nMatch = "";
+          $nGapOpen = "";
+          $nMismatch = "";
+        } else {
+          my @qPos = split //, $qAln;
+          my @sPos = split //, $sAln;
+          for (my $i = 0; $i < length($qAln); $i++) {
+            if ($qPos[$i] eq $sPos[$i]) {
+              $nMatch++;
+            } elsif ($qPos[$i] ne "-" && $sPos[$i] ne "-") {
+              $nMismatch++;
+            } elsif ($qPos[$i] eq "-" || $sPos[$i] eq "-") {
+              $nGapOpen++ if $i == 0 || ($qPos[$i-1] ne "-" && $sPos[$i-1] ne "-");
+            }
           }
+          $identity = 100 * $nMatch/length($qAln);
         }
-        my $identity = 100 * $nMatch/length($qAln);
         my $out = { 'query' => $query, 'qLength' => $qLength, 'qBegin' => $qBegin, 'qEnd' => $qEnd,
                     'subject' => $subject, 'sLength' => $sLength, 'sBegin' => $sBegin, 'sEnd' => $sEnd,
                     'score' => $score, 'eValue' => $evalue, 'bits' => $bits, 'EG2' => $EG2,
@@ -103,8 +114,8 @@ sub parseLast($) {
 # Given a reference to a hash of proteinId to sequence,
 # runs lastal, and returns a reference to
 # a list of hits from neighbor::parseLast()
-sub proteinsToSimilarity {
-  my ($proteinSeq) = @_;
+sub proteinsToSimilarity($$) {
+  my ($proteinSeq, $fast) = @_;
   return [] if scalar(keys %$proteinSeq) == 0;
   my $lastal = "$RealBin/../bin/lastal";
   my $lastdb = "$RealBin/../bin/lastdb";
@@ -126,9 +137,13 @@ sub proteinsToSimilarity {
   $cmd = "$lastdb -p $tmpLast $tmpFaa";
   system($cmd) == 0 || die "$cmd -- failed: $!";
   $cmd = "$lastal -P 6 $tmpLast $tmpFaa > $tmpLast.out";
-  system($cmd) == 0 || die "$cmd -- failed: $!";
+  print
+    "<P>Running LAST to cluster the proteins",
+    runTimerHTML(),
+    "</P>", "\n";
+  runWhileCommenting($cmd) == 0 || die "$cmd -- failed: $!";
   open(my $fhHits, "<", "$tmpLast.out") || die "Cannot read $tmpLast.out";
-  my $hits = parseLast($fhHits);
+  my $hits = parseLast($fhHits, $fast);
   close($fhHits) || die "Error reading $tmpLast.out";
   unlink($tmpFaa);
   foreach my $suffix (qw{bck des prj sds ssp suf tis out}) {
@@ -142,9 +157,9 @@ sub proteinsToSimilarity {
 # cluster proteins by similarity,
 # and returns a list of clusters, each being a list of at least two protein ids.
 # Uses proteinsToSimilarity() to find similar proteins.
-sub clusterProteins {
+sub clusterProteins($$) {
   my ($proteinSeq, $minCoverage) = @_;
-  my $hits = proteinsToSimilarity($proteinSeq);
+  my $hits = proteinsToSimilarity($proteinSeq, 1); # 1 means fast
   my @hits = grep $_->{query} ne $_->{subject}, @$hits;
   @hits = sort { $b->{score} <=> $a->{score} } @hits;
   my @clusters = (); # index to list of proteinIds
