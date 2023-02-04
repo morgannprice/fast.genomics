@@ -10,13 +10,15 @@ CREATE TABLE Genome (
   strain TEXT NOT NULL,
   gtdbAccession TEXT NOT NULL,
   assemblyName TEXT NOT NULL,
-  ncbiTaxonomy TEXT NOT NULL
+  ncbiTaxonomy TEXT NOT NULL,
+  nGenes INT NOT NULL,
+  nProteins INT NOT NULL /* #protein-coding genes */
 );
 CREATE INDEX 'GenomeDomain' ON Genome (gtdbDomain);
 CREATE INDEX 'GenomePhylum' ON Genome (gtdbPhylum);
 CREATE INDEX 'GenomeClass' ON Genome (gtdbClass);
 CREATE INDEX 'GenomeOrder' ON Genome (gtdbOrder);
-CREATE INDEX 'GenomeFmaily' ON Genome (gtdbFamily);
+CREATE INDEX 'GenomeFamily' ON Genome (gtdbFamily);
 CREATE INDEX 'GenomeGenus' ON Genome (gtdbGenus);
 CREATE INDEX 'GenomeSpecies' ON Genome (gtdbSpecies);
 CREATE INDEX 'GenomeStrain' ON Genome (strain);
