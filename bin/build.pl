@@ -211,7 +211,8 @@ foreach my $row (@genomes) {
   }
   print { $fh{Genome} } join("\t", $gid, @taxa,
                              csv_quote($row->{ncbi_strain_identifiers}), $row->{accession},
-                             $row->{ncbi_assembly_name}, $row->{ncbi_taxonomy})."\n";
+                             $row->{ncbi_assembly_name}, $row->{ncbi_taxonomy},
+                            $nGenes, $nGenesWithProteins)."\n";
 }
 
 foreach my $level (@levels) {
