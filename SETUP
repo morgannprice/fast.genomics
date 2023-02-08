@@ -19,14 +19,13 @@ i.e., if the cgi scripts are in parent/neighbor/cgi
 
 then the PaperBLAST libraries must be in parent/PaperBLAST/lib
 
-The data/ subdirectory should include neighbor.db and neighbor.mmseqs*
-(created by the bin/build.pl script). It should also include a
-data/tmp subdirectory that is writable by the web server.
+The data/ subdirectory should include neighbor.db, neighbor.sliced,
+neighbor.sliced*, and neighbor.faa.gz (created by the bin/build.pl
+script).
 
-Optional, for performance: use
-them into data/, use
-  mmseqs touchdb data/neighbor.mmseqs
-to make sure that mmseq's index is in memory.
+Important for performance: use
+  bin/touchSliced.pl data/neighbor.sliced
+to make sure that mmseq's indices are in memory.
 
 The bin directory must include the mmseqs2 executable (named mmseqs)
 
