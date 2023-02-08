@@ -16,28 +16,34 @@ Runs mmseqs easy-search on each slice (prefix0, prefix1, ...)
 and combines the results.
 
 Optional arguments:
--s $sens -- sensitivity of mmseqs
 -e $eValue
--max-seqs $maxSeqs
+-s $sens -- controls the sensitivity of mmseqs2
+-max-seqs $maxSeqs -- controls the pre-filter of mmseqs2,
+  and also limits the maximum #sequences returned
+-limit -- specify the number of hits to return
+  (defaults to max-seqs)
 -threads 1 -- #threads for each slice
   (each slice is run in parallel)
 -db-load-mode $dbLoadMode -- use 2 if you ran touchSliced.pl
 END
 ;
 
-my ($inFaa, $pre, $outFile, $debug);
+my ($inFaa, $pre, $outFile, $limit, $debug);
 die $usage
   unless GetOptions('in=s' => \$inFaa, 'sliced=s' => \$pre, 'out=s' => \$outFile,
                     'debug' => \$debug,
                     's=f' => \$sens,
                     'e=f' => \$eValue,
                     'max-seqs=i' => \$maxSeqs,
+                    'limit=i' => \$limit,
                     'threads=i' => \$nThreads,
                     'db-load-mode=i' => \$dbLoadMode)
   && defined $inFaa && defined $pre;
 die "#threads per slice must be in 1 to 100\n" unless $nThreads >= 1 && $nThreads <= 100;
 die "e value must be positive\n" unless $eValue > 0;
 die "max-seqs must be positive\n" unless $maxSeqs > 0;
+$limit = $maxSeqs if !defined $limit;
+die "limit must be positive\n" unless $limit > 0;
 
 die "No such file: $inFaa\n" unless -e $inFaa;
 
@@ -109,12 +115,16 @@ for (my $i = 0; $i < $nSlices; $i++) {
 }
 print STDERR "Read all hits\n" if defined $debug;
 
-# sort by bits, descending
-@hits = sort { $b->[11] <=> $a->[11] } @hits;
-# Reduce length to maxHits
-splice @hits, $maxSeqs if scalar(@hits) > $maxSeqs;
+# sort by query (index 0) and then by bits (index 11) descending
+@hits = sort { $a->[0] cmp $b->[0] || $b->[11] <=> $a->[11] } @hits;
+# Reduce length to maxSeqs
+my %nShown = (); # query to #hits shown so far
 foreach my $row (@hits) {
-  print $fhOut join("\t",  @$row) . "\n";
+  my $query = $row->[0];
+  if (!exists $nShown{$query} || $nShown{$query} < $limit) {
+    $nShown{$query}++;
+    print $fhOut join("\t",  @$row) . "\n";
+  }
 }
 close($fhOut) || die "Error writing to $outFile\n";
 system("rm -Rf $tmpDir");
