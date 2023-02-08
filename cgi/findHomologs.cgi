@@ -53,13 +53,13 @@ print p("Found",
 my $options = defined $gene ? "locus=".$gene->{locusTag}
   : "seqDesc=" . encode_entities($seqDesc) . "&" . "seq=$seq";
 print p("See",
-        a({-href => "neighbors.cgi?${options}"}, "gene neighborhoods"),
-        "or",
-        a({-href => "hitTaxa.cgi?${options}"}, "taxonomic distribution"),
-        "of homologs",
-        "or",
-        a({-href => "downloadHomologs.cgi?${options}",
-           -title => "tab-delimited table of homologs"}, "download"))
+        join(", or ",
+             a({-href => "neighbors.cgi?${options}"}, "gene neighborhoods"),
+             a({-href => "hitTaxa.cgi?${options}"}, "taxonomic distribution")
+             . " of homologs",
+             a({-href => "downloadHomologs.cgi?${options}",
+                -title => "tab-delimited table of homologs"}, "download"),
+             a({-href => "compare.cgi?${options}"}, "compare presence/absence")))
   if @$hitGenes > 0;
 print p("Or see", a({-href => "gene.cgi?locus=$gene->{locusTag}"}, "gene"))
   if defined $gene;
