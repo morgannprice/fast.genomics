@@ -9,22 +9,22 @@ use lib "$RealBin/../../PaperBLAST/lib";
 use FetchAssembly qw{ParseNCBIFeatureFile};
 use pbutils qw{ReadFastaEntry ReadTable};
 
+my $nSlices = 8;
 my $usage = <<END
 build.pl -genomes genomes.tsv -fetched assemblies.tsv -dir dir -test
 
 Creates the neighbor database, including the mysql database
-(neighbor.db), a big fasta file (neighbor.faa), and an mmseqs index
-(neigbor.mmseqs). The genomes table must include the fields fetch,
-(gtdb) accession, ncbi_assembly_name, gtdb_taxonomy, ncbi_taxonomy,
-and ncbi_strain_identifiers. The fetched table must include the fields
-fetch and gid.
+(neighbor.db), a big fasta file (neighbor.faa.gz), and a sliced mmseqs
+index (neighbor.sliced*). The genomes table must include the fields
+fetch, (gtdb) accession, ncbi_assembly_name, gtdb_taxonomy,
+ncbi_taxonomy, and ncbi_strain_identifiers. The fetched table must
+include the fields fetch and gid.
 
 Optional arguments:
 -out dir -- where to put the output files
--tmp dir/tmp -- the temporary directory for mmseqs
--mmseqs mmseqs_executable -- by default, assumes mmseqs is on the path
 -test -- test mode: build tab-delimited tables and faa file, but
    do not delete them or build the mmseqs or sqlite3 databases.
+-slices $nSlices -- how many slices to use for the mmseqs db
 END
 ;
 
@@ -32,16 +32,14 @@ END
 # So, need to replace any " with "" and surround the field with quotes.
 sub csv_quote($);
 
-my ($genomeFile, $fetchedFile, $inDir, $outDir, $tmpDir, $test);
-my $mmseqs = "mmseqs";
+my ($genomeFile, $fetchedFile, $inDir, $outDir, $test);
 die $usage
   unless GetOptions('genomes=s' => \$genomeFile,
                     'fetched=s' => \$fetchedFile,
                     'dir=s' => \$inDir,
                     'out=s' => \$outDir,
-                    'tmp=s' => \$tmpDir,
-                    'mmseqs=s' => \$mmseqs,
-                    'test' => \$test)
+                    'test' => \$test,
+                    'slices=i' => \$nSlices)
   && defined $genomeFile
   && defined $fetchedFile
   && defined $inDir
@@ -50,14 +48,7 @@ die $usage
 die "No such directory: $inDir\n" unless -d $inDir;
 $outDir = $inDir unless defined $outDir;
 die "No such directory: $outDir\n" unless -d $outDir;
-if (!defined $tmpDir) {
-  $tmpDir = "$inDir/tmp";
-  mkdir($tmpDir) unless -d $tmpDir;
-}
-die "No such directory: $tmpDir\n" unless -d $tmpDir;
-
-system("$mmseqs -h > /dev/null") == 0
-  || die "Cannot run $mmseqs\n";
+die "nSlices is out of range\n" unless $nSlices >= 1 && $nSlices <= 100;
 
 my @genomes = ReadTable($genomeFile,
   qw[fetch accession ncbi_assembly_name gtdb_taxonomy ncbi_taxonomy ncbi_strain_identifiers]);
@@ -70,10 +61,9 @@ print STDERR "Genomes with fetched assemblies: " . scalar(@genomes) . "\n";
 die "No genomes to load\n" if @genomes == 0;
 
 my $dbFile = "$outDir/neighbor.db";
-my $mmDb = "$outDir/neighbor.mmseqs";
+my $slicedDb = "$outDir/neighbor.sliced";
 if (!defined $test) {
   unlink($dbFile);
-  unlink($mmDb);
   my $sqlFile = "$RealBin/../lib/neighbor.sql";
   system("sqlite3 $dbFile < $sqlFile") == 0 || die $!;
   print STDERR "Created empty database $dbFile\n";
@@ -252,17 +242,18 @@ END
 ;
 close(SQLITE) || die "Error running sqlite3 import commands\n";
 
-print STDERR "Creating and indexing mmseqs database, see $outDir/mmseqs.log\n";
-my @mmCmds = ("mmseqs createdb $faaOut $mmDb",
-              "mmseqs createindex $mmDb $tmpDir");
-system("(" . join("; ", @mmCmds) . ") >& $outDir/mmseqs.log") == 0
-  || die "Error running mmseqs: $!\n";
-print STDERR "Finished building:\nsqlite3\t$dbFile\nmmseqs2\t$mmDb\n";
+print STDERR "Creating and indexing the sliced mmseqs database\n";
+my $cmd = "$RealBin/buildSliced.pl -in $faaOut -slices $nSlices -out $slicedDb";
+system($cmd) == 0
+  || die "Error running buildSliced.pl: $!\nCommand: $cmd\n";
+print STDERR "Finished building:\nsqlite3 $dbFile\nsliceddb $slicedDb\n";
 
 # Remove tab-delimited imports
 foreach my $file (values %files) {
   unlink($file);
 }
+
+system("gzip --force $faaOut") == 0 || die "gzip failed";
 
 sub csv_quote($) {
   my ($in) = @_;
