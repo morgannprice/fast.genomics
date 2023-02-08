@@ -230,6 +230,7 @@ foreach my $hit (@$geneHits) {
       my $aaLength = ($hit->{end} - $hit->{begin} + 1 - 3)/3;
       $s->{bar} = { beginFraction => ($hit->{sBegin} - 1)/$aaLength,
                     endFraction => min(1, $hit->{sEnd}/$aaLength),
+                    URL => "alignPair.cgi?${options}&locus2=" . $s->{locusTag},
                     title => $hitDetails,
                     color => $focalColor };
     }

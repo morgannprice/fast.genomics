@@ -1,4 +1,6 @@
 #!/usr/bin/perl -w
+# Compare presence/absence pattern of 2 proteins, and
+# how often the best hits are near each other and on the same strand
 use strict;
 
 use CGI qw(:standard Vars start_ul);
@@ -19,8 +21,8 @@ use pbweb qw{commify};
 
 # CGI arguments:
 # locus (a locus tag in the database) or seqDesc and seq
-# either query2, locus2, or seq2 and seqDesc2
-# optional: format=tsv
+# optional: query2, locus2, or seq2 and seqDesc2
+# optional, if a second protein is specified: format=tsv
 
 my $cgi = CGI->new;
 my $tsv = ($cgi->param('format') || "") eq  'tsv';

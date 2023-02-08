@@ -132,11 +132,15 @@ sub genesSvg {
       }
       my $yBar = $yTop + $geneHeight + 4;
       my $barColor = $bar->{color} || "darkgrey";
-      push @svgLines,
-        qq[<line x1="$xBar1" x2="$xBar2" y1="$yBar" y2="$yBar" style="stroke: $barColor; stroke-width: 3;">];
-      push @svgLines, "<title>" . encode_entities($bar->{title}) . "</title>"
+      my $line  = qq[<line x1="$xBar1" x2="$xBar2" y1="$yBar" y2="$yBar" style="stroke: $barColor; stroke-width: 3;">];
+      $line .= "<title>" . encode_entities($bar->{title}) . "</title>"
         if defined $bar->{title} && $bar->{title} ne "";
-      push @svgLines, "</line>";
+      $line .= "</line>";
+      if (exists $bar->{URL} && $bar->{URL} ne "") {
+        my $URL = encode_entities($bar->{URL});
+        $line = qq[<a xlink:href="$URL">$line</a>];
+      }
+      push @svgLines, $line;
     }
   }
   return (svg => join("\n", @svgLines) . "\n",
