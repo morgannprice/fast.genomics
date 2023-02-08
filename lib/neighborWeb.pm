@@ -48,7 +48,7 @@ sub getHitsFile($) {
 }
 
 sub getMMSeqsDb {
-  return "../data/neighbor.mmseqs";
+  return "../data/neighbor.sliced";
 }
 
 sub hasMMSeqsHits($) {
@@ -66,8 +66,6 @@ sub getMMSeqsHits($) {
   my $hitsFile = getHitsFile($seq);
   unless (NewerThan($hitsFile, $mmseqsDb)) {
     die "No such file: $mmseqsDb" unless -e $mmseqsDb;
-    my $mmseqs = "../bin/mmseqs";
-    die "No such executable: $mmseqs" unless -x $mmseqs;
 
     my $md5 = md5_hex($seq);
     my $faaFile = "../tmp/$md5.$$.faa";
@@ -75,26 +73,21 @@ sub getMMSeqsHits($) {
     print $fhFaa ">query\n$seq\n";
     close($fhFaa) || die "Error writing to $faaFile";
     my $tmpOut = "$hitsFile.$$";
-    die "No such directory: ../data/tmp" unless -d "../data/tmp";
     my $procId = $$;
     my $startTime = [gettimeofday()];
     my $timestamp = join(".",@$startTime);
-    my $mmseqsTmpDir = "../data/tmp/mm.$procId.$timestamp";
-    mkdir($mmseqsTmpDir) || die "Cannot mkdir $mmseqsTmpDir";
+    # higher sensitivity setting for shorter queries
+    my $mmseqsSens = length($seq) <= 150 ? 7 : 6;
     my ($nGenomes) = getDbHandle()->selectrow_array("SELECT COUNT(*) FROM Genome");
-    my @cmd = ($mmseqs, "easy-search", $faaFile, $mmseqsDb, $tmpOut, $mmseqsTmpDir,
-               "--max-seqs", $nGenomes,
-               "--threads", 1,
-               "--db-load-mode", 2,
-               ">", "$tmpOut.log");
+    my $maxSeqs = int(1.5 * $nGenomes + 0.5);
+    my $cmd = "../bin/searchSliced.pl -in $faaFile -sliced $mmseqsDb -out $tmpOut"
+      . " -max-seq $maxSeqs -limit $nGenomes -db-load-mode 2 -s $mmseqsSens";
     print CGI::p("Searching for similar proteins with mmseqs2",
                  CGI::small(runTimerHTML())), "\n";
-    runWhileCommenting(join(" ", @cmd)) == 0
-      || die "Error running @cmd -- $!";
+    runWhileCommenting($cmd) == 0
+      || die "Error running $cmd -- $!";
     rename($tmpOut, $hitsFile) || die "Renaming $tmpOut to $hitsFile failed";
     unlink($faaFile);
-    unlink("$tmpOut.log");
-    system("rm -Rf $mmseqsTmpDir");
     my $elapsed = tv_interval($startTime);
     print CGI::p(sprintf("mmseqs2 finished in %.1f seconds", $elapsed))."\n";
   }
