@@ -40,7 +40,7 @@ if ($tsv) {
  die "No homologs for first gene yet\n" unless hasMMSeqsHits($seq);
 }
 else {
-  print h3("First gene");
+  print h3("First protein");
   if ($gene) {
     my $genome = gidToGenome($gene->{gid});
     print p(a({-href => "gene.cgi?$options"}, $gene->{locusTag}) . ":",
@@ -55,15 +55,15 @@ else {
     finish_page();
   }
   unless (hasMMSeqsHits($seq)) {
-    print p("Sorry, first gene does not have homologs yet");
-    print a({-href => "findHomologs.cgi?$options"}, "Find homologs for the first gene");
+    print p("Sorry, first protein does not have homologs yet");
+    print a({-href => "findHomologs.cgi?$options"}, "Find homologs for the first protein");
     finish_page();
   }
 }
 my $hits1 = getMMSeqsHits($seq);
 if (scalar(@$hits1) == 0) {
   exit(0) if $tsv;
-  print p("Sorry, no homologs were found for the first gene");
+  print p("Sorry, no homologs were found for the first protein");
   finish_page;
 }
 
@@ -73,7 +73,7 @@ my $seq2 = $cgi->param('seq2');
 my $seqDesc2 = $cgi->param('desc2');
 my $query2 = $cgi->param('query2') || "";
 my $gene2;
-print h3("Second gene") unless $tsv;
+print h3("Second protein") unless $tsv;
 if (defined $locus2 && $locus2 ne "") {
   $gene2 = locusTagToGene($locus2) || die "Unknown locus tag in locus2 parameter";
 } elsif ($seq2) {
@@ -147,15 +147,15 @@ if ($tsv) {
   }
 }
 unless (hasMMSeqsHits($seq2)) {
-  die "No homologs for second gene yet\n" if $tsv;
-  print p("Sorry, second gene does not have homologs yet");
-  print a({-href => "findHomologs.cgi?$options2"}, "Find homologs for the second gene");
+  die "No homologs for second protein yet\n" if $tsv;
+  print p("Sorry, second protein does not have homologs yet");
+  print a({-href => "findHomologs.cgi?$options2"}, "Find homologs for the second protein");
   finish_page();
 }
 my $hits2 = getMMSeqsHits($seq2);
 if (scalar(@$hits2) == 0) {
   exit(0) if $tsv;
-  print p("Sorry, no homologs were found for the second gene");
+  print p("Sorry, no homologs were found for the second protein");
   finish_page;
 }
 
@@ -169,8 +169,8 @@ my $geneHits1 = hitsToGenes($hits1);
 my $max1 = estimateTopScore($geneHits1->[0], $seq);
 my $geneHits2 = hitsToGenes($hits2);
 my $max2 = estimateTopScore($geneHits2->[0], $seq2);
-print p("Loaded", commify(scalar(@$geneHits1)), "homologs for the first gene",
-        "and", commify(scalar(@$geneHits2)), "homologs for the second gene"), "\n"
+print p("Loaded", commify(scalar(@$geneHits1)), "homologs for the first protein",
+        "and", commify(scalar(@$geneHits2)), "homologs for the second protein"), "\n"
   unless $tsv;
 
 # Top hits by genome
@@ -365,6 +365,7 @@ if ($nInBoth > $nSame + 1) {
             "The corresponding bit score thresholds are $thresh1 ($f1% of max)",
             " and $thresh2 ($f2% of max), respectively.",
            "$nCloseThresh of these co-occuring homologs ($fClose%) are nearby (within $closeKb kb and on the same strand).");
+    print p({-style => "font-size: 90%;"}, "Warning: P value is based on the assumption that the two genes appear in genomes independently. If both genes are conserved within a group of related genera, then they will have significant co-occurrence, even if there is no functional relationship between them. Nevertheless, the P value is useful for selecting a threshold.");
   } else {
     print p("No significant co-occurence");
   }
@@ -417,10 +418,10 @@ if ($nInBoth > $nSame + 1) {
     $plot->marginText("Score ratios in each genome", "top",
                       title => "For each genome with a homolog of either gene, the score ratios (bits/max) for the best hits",
                       style => "font-size: larger; font-weight: bold;"),
-    $plot->marginText("Score ratio for gene 1", "bottom",
-                      title => "Score (bits) of best homolog of gene 1 / max ($max1Show bits)"),
-    $plot->marginText("Score ratio for gene 2", "left",
-                      title => "Score (bits) of best homolog of gene 2 / max ($max2Show bits)");
+    $plot->marginText("Score ratio for protein 1", "bottom",
+                      title => "Score (bits) of best homolog of protein 1 / max ($max1Show bits)"),
+    $plot->marginText("Score ratio for protein 2", "left",
+                      title => "Score (bits) of best homolog of protein 2 / max ($max2Show bits)");
 
   # legend for color-coding, at top
   my $top = $plot->{drawTop} + $plot->{lineSize};
