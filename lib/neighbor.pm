@@ -47,7 +47,7 @@ sub readMMSeqsHits($) {
     die "Invalid bits in mmseqs file $file"
       unless $row{bits} =~ m/^[0-9.]+$/;
     die "Invalid E-value in mmseqs file $file"
-      unless $row{eValue} =~ m/^[0-9.E+-]+$/;
+      unless $row{eValue} =~ m/^[0-9.eE+-]+$/;
     push @out, \%row;
   }
   close($fh) || die "Error reading $file";
