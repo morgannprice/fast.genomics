@@ -12,7 +12,8 @@ Given a large fasta file of protein sequences, split it into the
 requested number of slices and format the mmseqs databases. The
 resulting files will be named based on the output argument,
 i.e. db0.mmseqs, db1.mmseqs, ..., and associated index files.
-These can be queried with searchSliced.pl
+These can be queried with searchSliced.pl. The #slices is recorded in
+db.nSlices and db will be an empty file.
 END
 ;
 
@@ -71,8 +72,11 @@ for (my $i = 0; $i < $nSlices; $i++) {
 }
 print STDERR "Created and indexed\n${outPre}0\nthrough\n$outPre".($nSlices-1)."\n";
 
-open (my $fh, ">", "$outPre.nSlices") || die "Cannot write to $outPre.nSlices";
-print $fh $nSlices,"\n";
-close($fh) || die "Error writing to $outPre.nSlices\n";
+open (my $fhS, ">", "$outPre.nSlices") || die "Cannot write to $outPre.nSlices";
+print $fhS $nSlices,"\n";
+close($fhS) || die "Error writing to $outPre.nSlices\n";
+
+open (my $fh, ">", $outPre) || die "Cannot write to $outPre";
+close($fh) || die "Error writing to $outPre\n";
 
 system("rm -Rf $tmpDir");
