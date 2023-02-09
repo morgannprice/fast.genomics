@@ -11,6 +11,7 @@ use neighbor;
 # neighborWeb.pm relies on various PaperBLAST libraries
 use lib "../../PaperBLAST/lib";
 use neighborWeb;
+use pbweb qw{commify};
 
 # CGI arguments:
 # query (optional) -- usually an identifier or locus tag,
@@ -46,11 +47,104 @@ if (!defined $query{genes} && !defined $query{seq}) {
       br(),
       "or a genus name and a protein description",
       br(),
-      textarea( -name  => 'query', -value => '', -cols  => 70, -rows  => 10 ),
+      textarea( -name  => 'query', -value => '', -cols  => 80, -rows  => 4 ),
       br(),
       br(),
       submit('Search'), reset()),
     end_form;
+  my @examples = ("ING2E5A_RS06865",
+                  "3osdA",
+                  "Escherichia thymidylate synthase");
+  my @exampleLabels = ("by locus tag", "by Protein Data Bank entry", "by genus and description");
+  my @exampleLinks = ();
+  for (my $i = 0; $i < scalar(@examples); $i++) {
+    push @exampleLinks, a({ -href => "search.cgi?query=" . uri_escape($examples[$i]),
+                            -style => "text-decoration: none;",
+                            -title => $exampleLabels[$i] },
+                          $examples[$i]);
+  }
+  print p({-style => "font-size: 90%;"},
+          "Example searches:", join(", ", @exampleLinks));
+  my ($nGenomes) = getDbHandle()->selectrow_array("SELECT COUNT(*) FROM Genome");
+  $nGenomes = commify($nGenomes);
+  print <<END
+<H3>About <i>fast.genomics</i></H3>
+
+<P>Fast.genomics includes one representative genome for $nGenomes genera
+of Bacteria and Archaea. These were classified by using
+the <A HREF="https://gtdb.ecogenomic.org/">Genome Tree Database</A>.
+Only high-quality genomes are included. Potential chimeras were excluded using
+<A HREF="https://genomebiology.biomedcentral.com/articles/10.1186/s13059-021-02393-0">GUNC</A>.
+Where possible, genomes were
+taken from NCBI's <A
+HREF="https://www.ncbi.nlm.nih.gov/refseq/">RefSeq</A>.
+
+<P>Fast.genomics uses <A
+HREF="https://github.com/soedinglab/MMseqs2">mmseqs2</A> to find
+homologs for a protein sequence of interest. This usually takes less
+than 5 seconds. To speed up the search, fast.genomics keeps the index
+in memory, and it splits the index into 8 shards to allow parallel
+analysis of a single query. The protein of interest
+need not be in fast.genomic's database.
+
+<P>Once the homologs are identified, fast.genomics can quickly show:
+
+<UL>
+<LI><A HREF="neighbors.cgi?locus=ING2E5A_RS06865">Gene neighborhoods</A>
+<LI><A HREF="hitTaxa.cgi?locus=ING2E5A_RS06865">Which taxa contain homologs</A>
+<LI>Compare the <A HREF="compare.cgi?locus=ING2E5A_RS06865&query2=ING2E5A_RS06860">presence/absence</A> of two proteins
+</UL>
+
+<P style="font-size:90%;">(These examples are for a putative 3-ketoglycoside hydrolase, ING2E5A_RS06865. This family of proteins was formerly known as DUF1080.)</P>
+END
+    ;
+  my ($nPhyla) = getDbHandle()->selectrow_array("SELECT COUNT(DISTINCT gtdbPhylum) FROM Genome");
+  $nPhyla = commify($nPhyla);
+  my ($nClasses) = getDbHandle()->selectrow_array("SELECT COUNT(DISTINCT gtdbClass) FROM Genome");
+  $nClasses = commify($nClasses);
+  my ($nOrders) = getDbHandle()->selectrow_array("SELECT COUNT(DISTINCT gtdbOrder) FROM Genome");
+  $nOrders = commify($nOrders);
+  my ($nFamilies) = getDbHandle()->selectrow_array("SELECT COUNT(DISTINCT gtdbFamily) FROM Genome");
+  $nFamilies = commify($nFamilies);
+  my $dbDate = `date -r ../data/neighbor.db '+%B %-d %Y'`;
+  chomp $dbDate;
+  print <<END
+<H3>Statistics</H3>
+
+<TABLE cellpadding=2 cellspacing=2>
+<TR><TD>Phyla</TD><TD align="right">$nPhyla</TD>
+<TR><TD>Classes</TD><TD align="right">$nClasses</TD>
+<TR><TD>Orders</TD><TD align="right">$nOrders</TD>
+<TR><TD>Families</TD><TD align="right">$nFamilies</TD>
+<TR><TD>Genomes</TD><TD align="right">$nGenomes</TD>
+END
+    ;
+  my $buildLog = "../data/build.log";
+  if (-e $buildLog) {
+    my $nProteins = `egrep '^nProteins' $buildLog | cut -f 2`;
+    chomp $nProteins;
+    $nProteins = commify($nProteins);
+    my $nGenes = `egrep '^nGenes' $buildLog | cut -f 2`;
+    $nGenes = commify($nGenes);
+    print <<END
+<TR><TD>Protein sequences</TD><TD align="right">$nProteins</TD>
+<TR><TD>Genes</TD><TD align="right">$nGenes</TD>
+END
+      ;
+  }
+  print <<END
+</TABLE>
+
+This version of the database was built on $dbDate.
+
+<H3>Downloads</H3>
+
+<UL>
+<LI><A HREF="../data/neighbor.db">SQLite3 database</A>
+<LI><A HREF="../data/neighbor.faa.gz">Protein sequences</A> (fasta format, gzipped)
+</UL>
+END
+    ;
   finish_page();
 }
 
