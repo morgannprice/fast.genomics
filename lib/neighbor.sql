@@ -32,7 +32,7 @@ CREATE TABLE Gene (
   end INT NOT NULL,
   strand TEXT NOT NULL,
   locusTag TEXT NOT NULL,  /* like AF_RS00005 */
-  proteinId TEXT NOT NULL, /* like WP_010877517.1 */
+  proteinId TEXT NOT NULL, /* like WP_010877517.1, or the empty string if not protein coding */
   desc TEXT NOT NULL,
   PRIMARY KEY (gid, scaffoldId, begin, end, strand, locusTag)
 );
