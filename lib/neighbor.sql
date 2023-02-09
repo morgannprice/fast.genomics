@@ -1,5 +1,5 @@
 CREATE TABLE Genome (
-  gid TEXT PRIMARY KEY,
+  gid TEXT PRIMARY KEY, /* assemblyId in the downloaded tables */
   gtdbDomain TEXT NOT NULL,
   gtdbPhylum TEXT NOT NULL,
   gtdbClass TEXT NOT NULL,
