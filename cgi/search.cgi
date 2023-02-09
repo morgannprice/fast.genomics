@@ -141,8 +141,9 @@ END
 <H3>Downloads</H3>
 
 <UL>
-<LI><A HREF="../data/neighbor.db">SQLite3 database</A>
+<LI><A HREF="downloadGenomes.cgi">Genomes</A> (tab-delimited)
 <LI><A HREF="../data/neighbor.faa.gz">Protein sequences</A> (fasta format, gzipped)
+<LI><A HREF="../data/neighbor.db">SQLite3 database</A> (see <A HREF="../lib/neighbor.sql">schema</A>)
 </UL>
 END
     ;
