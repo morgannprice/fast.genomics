@@ -70,7 +70,7 @@ if (!defined $query{genes} && !defined $query{seq}) {
   print <<END
 <H3>About <i>fast.genomics</i></H3>
 
-<P>Fast.genomics includes one representative genome for $nGenomes genera
+<P>Fast.genomics includes representative genomes for $nGenomes genera
 of Bacteria and Archaea. These were classified by using
 the <A HREF="https://gtdb.ecogenomic.org/">Genome Tree Database</A>.
 Only high-quality genomes are included. Potential chimeras were excluded using
@@ -81,11 +81,12 @@ HREF="https://www.ncbi.nlm.nih.gov/refseq/">RefSeq</A>.
 
 <P>Fast.genomics uses <A
 HREF="https://github.com/soedinglab/MMseqs2">mmseqs2</A> to find
-homologs for a protein sequence of interest. This usually takes less
-than 5 seconds. To speed up the search, fast.genomics keeps the index
-in memory, and it splits the index into 8 shards to allow parallel
-analysis of a single query. The protein of interest
-need not be in fast.genomic's database.
+homologs for a protein sequence of interest. This usually takes a few
+seconds. To speed up the search, fast.genomics splits the protein database into pieces,
+which allows parallel
+analysis of a single query.
+Fast.genomics also keeps the indexes in memory.
+The protein of interest need not be in fast.genomics' database.
 
 <P>Once the homologs are identified, fast.genomics can quickly show:
 
@@ -106,17 +107,17 @@ END
   $nOrders = commify($nOrders);
   my ($nFamilies) = getDbHandle()->selectrow_array("SELECT COUNT(DISTINCT gtdbFamily) FROM Genome");
   $nFamilies = commify($nFamilies);
-  my $dbDate = `date -r ../data/neighbor.db '+%B %-d %Y'`;
+  my $dbDate = `date -r ../data/neighbor.db '+%b %-d, %Y'`;
   chomp $dbDate;
   print <<END
 <H3>Statistics</H3>
 
 <TABLE cellpadding=2 cellspacing=2>
-<TR><TD>Phyla</TD><TD align="right">$nPhyla</TD>
-<TR><TD>Classes</TD><TD align="right">$nClasses</TD>
-<TR><TD>Orders</TD><TD align="right">$nOrders</TD>
-<TR><TD>Families</TD><TD align="right">$nFamilies</TD>
-<TR><TD>Genomes</TD><TD align="right">$nGenomes</TD>
+<TR style="background-color: lightgrey;"><TD>Phyla</TD><TD align="right">$nPhyla</TD>
+<TR style="background-color: lightyellow;"><TD>Classes</TD><TD align="right">$nClasses</TD>
+<TR style="background-color: lightgrey;"><TD>Orders</TD><TD align="right">$nOrders</TD>
+<TR style="background-color: lightyellow;"><TD>Families</TD><TD align="right">$nFamilies</TD>
+<TR style="background-color: lightgrey;"><TD>Genomes</TD><TD align="right">$nGenomes</TD>
 END
     ;
   my $buildLog = "../data/build.log";
@@ -127,15 +128,15 @@ END
     my $nGenes = `egrep '^nGenes' $buildLog | cut -f 2`;
     $nGenes = commify($nGenes);
     print <<END
-<TR><TD>Protein sequences</TD><TD align="right">$nProteins</TD>
-<TR><TD>Genes</TD><TD align="right">$nGenes</TD>
+<TR style="background-color: lightyellow;"><TD>Protein sequences</TD><TD align="right">$nProteins</TD>
+<TR style="background-color: lightgrey;"><TD>Genes</TD><TD align="right">$nGenes</TD>
 END
       ;
   }
   print <<END
+<TR style="background-color: lightyellow;"><TD>Database date</TD><TD align="right">$dbDate</TD></TR>
 </TABLE>
 
-This version of the database was built on $dbDate.
 
 <H3>Downloads</H3>
 
