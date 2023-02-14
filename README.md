@@ -15,7 +15,7 @@ interface (CGI).
 You can download the current database as a protein fasta file and a
 SQLite3 database, see bottom of
 
-https://fast.genomics.lbl.gov/
+http://fast.genomics.lbl.gov/
 
 # Installation
 
