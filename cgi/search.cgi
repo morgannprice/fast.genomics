@@ -50,7 +50,7 @@ if (!defined $query{genes} && !defined $query{seq}) {
       textarea( -name  => 'query', -value => '', -cols  => 80, -rows  => 4 ),
       br(),
       br(),
-      submit('Search'), reset()),
+      submit('Search')),
     end_form;
   my @examples = ("ING2E5A_RS06865",
                   "3osdA",
