@@ -56,6 +56,7 @@ sub bestHitUniprot($) {
   return { 'uniprotId' => $uniprotId, 'geneName' => $geneName, 'species' => $species,
            'prefix' => $prefix, desc => $desc,
            'identity' => $identity, 'eValue' => $eValue, 'bits' => $bits,
-           'qBegin' => $qBegin, 'qEnd' => $qEnd, 'sBegin' => $sBegin, 'sEnd' => $sEnd,
+           # not sure why ends are 1 off
+           'qBegin' => $qBegin, 'qEnd' => $qEnd+1, 'sBegin' => $sBegin, 'sEnd' => $sEnd+1,
            'service' => 'SANSparallel', 'serviceURL' => $base };
 }
