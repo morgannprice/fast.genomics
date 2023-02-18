@@ -402,6 +402,14 @@ END
       CGI::a({-href => "https://papers.genomics.lbl.gov/cgi-bin/psortb.cgi?name=${header}&type=${psortType}&seq=${seq}",
               -title => "PSORTb v3.0 for $psortShow"},
         "PSORTb") . " ($psortShow)",
+      "Predict transmembrane helices: "
+      . CGI::a({-href => "https://fit.genomics.lbl.gov/cgi-bin/myPhobius.cgi?name=${header}&seq=${seq}"},
+               "Phobius"),
+      "Find the "
+      . CGI::a({ -href => "https://fast.genomics.lbl.gov/cgi/bestHitUniprot.cgi?query=>${header}$newline$seq",
+            -title => "See UniProt's annotation, the predicted structure, and protein families from InterPro"},
+          "best match")
+      . " in UniProt",
       "Find homologs in the " .
       CGI::a({-href => "https://iseq.lbl.gov/genomes/seqsearch?sequence=>${header}$newline$seq"},
              "ENIGMA genome browser")
