@@ -386,13 +386,12 @@ if ($nInBoth > $nSame + 1) {
   my $drawHeight = $plot->{drawBottom} - $plot->{drawTop};
   my $below0Width = $x0 - $plot->{drawLeft};
   my $below0Height = $plot->{drawBottom} - $y0;
+  my $greyTitle = "genomes with homologs for only one of the genes are shown in the grey region";
   print join("\n",
              qq{<rect x="$plot->{drawLeft}" y="$y0" width="$drawWidth" height="$below0Height" fill="lightgrey" stroke="none">},
-             qq{<title>genomes with no hit to either gene are in the grey region</title>},
-             qq{</rect>},
+             qq{<title>$greyTitle</title></rect>},
              qq{<rect x="$plot->{drawLeft}" y="$plot->{drawTop}" width="$below0Width" height="$drawHeight" fill="lightgrey" stroke="none">},
-             qq{<title>genomes with homologs for only one of the genes are shown in the grey region</title>},
-             qq{</rect>});
+             qq{<title>$greyTitle</title></rect>});
   {
     my $x = $plot->convertX(0.3);
     my $y = $plot->convertY(0.3);
