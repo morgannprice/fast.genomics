@@ -48,11 +48,14 @@ sub genesSvg {
   my $geneHeight = $param{geneHeight} || 18;
   my $showLabel = $param{showLabel} || 0;
 
+  # ensure genes are sorted
+  my @genes = sort { $a->{begin} <=> $b->{begin} } @$genes;
+
   my @svgLines = ();
   my $geneYMid = $yTop + $geneHeight/2;
   push @svgLines,
     qq[<line x1="$xLeft" y1="$geneYMid" x2="$xRight" y2="$geneYMid" style="stroke:darkgrey; stroke-width:1;"/>];
-  foreach my $gene (@$genes) {
+  foreach my $gene (@genes) {
     my ($x1, $x2, $showStrand);
     if ($invert) {
       $x1 = $xLeft + ($end - $gene->{end}) * $ntWidth;
@@ -84,7 +87,6 @@ sub genesSvg {
 
     my $y1 = $yTop;
     my $y2 = $yTop + $geneHeight; # SVG has +y axis going down
-    my $geneYMid = ($y1+$y2)/2;
     my ($xStart, $xStop) = ($x1,$x2);
     ($xStart,$xStop) = ($x2,$x1) if $showStrand eq "-";
     my @points; # list of x,y pairs
@@ -142,6 +144,40 @@ sub genesSvg {
       }
       push @svgLines, $line;
     }
+  }
+
+  # add invisible boxes in between adjacent genes, with hover text for how far apart they are
+  for (my $i = 0; $i < scalar(@$genes) - 1; $i++) {
+    my $gene1 = $genes[$i];
+    my $gene2 = $genes[$i+1];
+    my ($x1, $x2); # end of gene 1 to beginning of gene 2
+    if ($invert) {
+      $x1 = $xLeft + ($end - $gene1->{end}) * $ntWidth;
+      $x2 = $xLeft + ($end - $gene2->{begin}) * $ntWidth;
+    } else {
+      $x1 = $xLeft + ($gene1->{end} - $begin) * $ntWidth;
+      $x2 = $xLeft + ($gene2->{begin} - $begin) * $ntWidth;
+    }
+    ($x1, $x2) = ($x2, $x1) unless $x2 > $x1;
+    next unless $x1 >= $xLeft && $x2 <= $xRight;
+    $x1 = max($xLeft, $x1 - 3);
+    $x2 = min($xRight, $x2 + 3);
+    my $distText;
+    if ($invert) {
+      $distText = "$gene2->{label} and $gene1->{label}";
+    } else {
+      $distText = "$gene1->{label} and $gene2->{label}";
+    }
+    if ($gene1->{end} >= $gene2->{begin}) {
+      $distText .= " overlap by " . ($gene1->{end} - $gene2->{begin} + 1 ) . " nucleotides";
+    } else {
+      $distText .= " are separated by " . ($gene2->{begin} - $gene1->{end} - 1 ) . " nucleotides";
+    }
+    my $dx = $x2 - $x1;
+    my $y1 = $geneYMid - 3;
+    my $dy = 6;
+    push @svgLines,
+      qq{<rect x="$x1" width="$dx" y="$y1" height="$dy" stroke="none" fill-opacity=0><title>$distText</title></rect>};
   }
   return (svg => join("\n", @svgLines) . "\n",
           xMax => int(0.99 + $xRight), yMax => int(0.5 + $yTop + $geneHeight + 8));
