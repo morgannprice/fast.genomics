@@ -20,8 +20,8 @@ use pbweb qw{commify};
 # locus (a locus tag in the database) or seqDesc and seq
 # n -- max number of hits to show
 # kb -- how many kilobases to show
-# hitType -- top or random; top means show top hits and is the default
-#	random means select that many random good hits
+# hitType -- top, random, or randomAny; top means show top hits and is the default;
+#	random means select that many random good hits; randomAny means random N hits
 my $cgi = CGI->new;
 my ($gene, $seqDesc, $seq) = getGeneSeqDesc($cgi);
 my $n = $cgi->param('n');
@@ -33,7 +33,6 @@ $kbShown = min(40, max(2, $kbShown));
 my $ntShown = $kbShown * 1000;
 my $kbWidth = int(0.5 + 150 / ($kbShown/6));
 my $hitType = $cgi->param('hitType') || 'top';
-die "Invalid hitType" unless $hitType eq 'top' || $hitType eq 'random';
 
 if (defined $gene && ! $seq) {
   # should not be reachable, but redirect to gene page just in case
@@ -76,25 +75,38 @@ if (scalar(@$hits) == 0) {
   print p("Sorry, no homologs were found for this sequence");
   finish_page;
 }
+
 my $geneHits; # reference to a list of gene hits
-my $scoreThreshold;
+my $listLabel = "hits";
+my $nTot = scalar(@$hits);
 if ($hitType eq "top") {
-  $geneHits = hitsToTopGenes( $hits, $n);
-} else {
+  $geneHits = hitsToTopGenes($hits, $n);
+} elsif ($hitType eq "randomAny") {
+  $geneHits = hitsToRandomGenes($hits, $n, 0); # threshold score of 0
+} elsif ($hitType eq "random") {
   my $maxScore = estimateTopScore($hits->[0], $seq);
-  $scoreThreshold = sprintf("%.1f", 0.3 * $maxScore);
-  $geneHits = hitsToRandomGenes( $hits, $n, $scoreThreshold);
+  my $scoreThreshold = sprintf("%.1f", 0.3 * $maxScore);
+  $geneHits = hitsToRandomGenes($hits, $n, $scoreThreshold);
+  $nTot = scalar(grep { $_->{bits} >= $scoreThreshold } @$hits);
+  $listLabel = "good hits (&ge; $scoreThreshold bits)";
+} else {
+  die "Unknown hitType $hitType";
 }
-if (@$geneHits < $n && $hitType eq "top") {
-  print p("Showing $kbShown kb around all", commify(scalar(@$geneHits)), "hits");
+
+if (@$geneHits < $n) {
+  print p("Showing $kbShown kb around all",
+          commify(scalar(@$geneHits)),
+          $listLabel);
 } elsif ($hitType eq "top") {
-  print p("Showing $kbShown kb around the top $n hits, out of at least",
-          commify(scalar(@$hits)));
+  print p("Showing $kbShown kb around the top",
+          commify(scalar(@$geneHits)),
+          "hits, out of at least",
+          commify($nTot));
 } else {
   print p("Showing $kbShown kb around",
-          scalar(@$geneHits),
-          "random good hits (&ge; $scoreThreshold bits), out of at least",
-          commify(scalar(grep $_->{bits} >= $scoreThreshold, @$hits)), "good hits");
+          commify(scalar(@$geneHits)),
+          "random $listLabel, out of at least",
+          commify($nTot));
 }
 print "\n";
 
@@ -105,8 +117,9 @@ print
   geneSeqDescSeqHidden($gene, $seqDesc, $seq),
   p('Hits to show:',
     popup_menu(-name => 'n', -values => [25, 50, 100, 150, 200], -default => $n),
-    popup_menu(-name => 'hitType', -values => ["random", "top"],
+    popup_menu(-name => 'hitType', -values => ["top", "randomAny", "random"],
                -labels => { 'top' => 'top hits',
+                            'randomAny' => 'random hits',
                             'random' => 'random good hits' },
                -default => $hitType),
     "&nbsp;",
