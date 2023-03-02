@@ -168,6 +168,7 @@ sub genesSvg {
     } else {
       $distText = "$gene1->{label} and $gene2->{label}";
     }
+    $distText =~ s/[<>'"]//g;
     if ($gene1->{end} >= $gene2->{begin}) {
       $distText .= " overlap by " . ($gene1->{end} - $gene2->{begin} + 1 ) . " nucleotides";
     } else {
