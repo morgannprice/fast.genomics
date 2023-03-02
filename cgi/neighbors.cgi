@@ -22,6 +22,8 @@ use pbweb qw{commify};
 # kb -- how many kilobases to show
 # hitType -- top, random, or randomAny; top means show top hits and is the default;
 #	random means select that many random good hits; randomAny means random N hits
+# format -- empty (default -- shows an svg) or fasta (proteins sequences of homologs shown)
+#     or tsv (tab-delimited table of all genes shown)
 my $cgi = CGI->new;
 my ($gene, $seqDesc, $seq) = getGeneSeqDesc($cgi);
 my $n = $cgi->param('n');
@@ -52,28 +54,63 @@ unless (hasMMSeqsHits($seq)) {
   exit(0);
 }
 
-my $title = 'Gene neighborhoods';
-if ($gene) {
-  $title .= " for $gene->{locusTag} and homologs";
-} else {
-  $title .= " for homologs of " . encode_entities($seqDesc);
-}
-start_page('title' => $title);
+my $format = $cgi->param('format') || "";
+$format = "" unless $format eq "fasta" || $format eq "tsv";
+$format = "" unless hasMMSeqsHits($seq);
 
-autoflush STDOUT 1; # show preliminary results
+if ($format eq "") {
+  my $title = 'Gene neighborhoods';
+  if ($gene) {
+    $title .= " for $gene->{locusTag} and homologs";
+  } else {
+    $title .= " for homologs of " . encode_entities($seqDesc);
+  }
+  start_page('title' => $title);
+  autoflush STDOUT 1; # show preliminary results
+} else {
+  my $fileName = "browse_";
+  if (defined $gene) {
+    $fileName .= $gene->{locusTag};
+  } else {
+    my $firstWord = $seqDesc;
+    if ($firstWord =~ m/^(sp|tr)[|]/) { # UniProt entries
+      $firstWord =~ s/^[a-zA-Z]+[|]//;
+    }
+    $firstWord =~ s/[| ].*//;
+    if ($firstWord =~ m/^[a-zA-Z0-9._-]+$/) {
+      $fileName .= $firstWord;
+    } else {
+      $fileName .= length($seq);
+    }
+  }
+  $fileName .= "." . $format;
+  if ($format eq "fasta") {
+    print "Content-Type:text\n";
+  } elsif ($format eq "tsv") {
+    print "Content-Type:text/tab-separated-values\n";
+  } else {
+    die;
+  }
+  print "Content-Disposition: attachment; filename=$fileName\n\n";
+}
 
 if (defined $gene) {
   print p(a({-href => "gene.cgi?locus=$locusTag"}, "$locusTag"),
           "from",
           i($genome->{gtdbSpecies}), $genome->{strain}.":",
-          encode_entities($gene->{desc}));
+          encode_entities($gene->{desc}))
+    if $format eq "";;
 }
-print "\n";
+print "\n" if $format eq "";
 
 my $hits = getMMSeqsHits($seq);
 if (scalar(@$hits) == 0) {
-  print p("Sorry, no homologs were found for this sequence");
-  finish_page;
+  if ($format eq "") {
+    print p("Sorry, no homologs were found for this sequence");
+    finish_page;
+  } else {
+    exit(0); # nothing to report
+  }
 }
 
 my $geneHits; # reference to a list of gene hits
@@ -93,51 +130,81 @@ if ($hitType eq "top") {
   die "Unknown hitType $hitType";
 }
 
-if (@$geneHits < $n) {
-  print p("Showing $kbShown kb around all",
-          commify(scalar(@$geneHits)),
-          $listLabel);
-} elsif ($hitType eq "top") {
-  print p("Showing $kbShown kb around the top",
-          commify(scalar(@$geneHits)),
-          "hits, out of at least",
-          commify($nTot));
-} else {
-  print p("Showing $kbShown kb around",
-          commify(scalar(@$geneHits)),
-          "random $listLabel, out of at least",
-          commify($nTot));
-}
-print "\n";
-
-# Show options form
-my $randomOption = "";
-print
-  start_form( -name => 'input', -method => 'GET', -action => 'neighbors.cgi' ),
-  geneSeqDescSeqHidden($gene, $seqDesc, $seq),
-  p('Hits to show:',
-    popup_menu(-name => 'n', -values => [25, 50, 100, 150, 200], -default => $n),
-    popup_menu(-name => 'hitType', -values => ["top", "randomAny", "random"],
-               -labels => { 'top' => 'top hits',
-                            'randomAny' => 'random hits',
-                            'random' => 'random good hits' },
-               -default => $hitType),
-    "&nbsp;",
-    'Kilobases:', popup_menu(-name => 'kb', -values => [6, 9, 12, 18, 25, 40], -default => $kbShown),
-    "&nbsp;",
-    submit('Change')),
-  end_form;
-
-my @links = ();
 my $options = geneSeqDescSeqOptions($gene,$seqDesc,$seq);
-if (defined $gene) {
-  push @links, a({-href => "gene.cgi?$options"}, "gene");
-} else {
-  push @links, a({-href => "seq.cgi?$options"}, "sequence");
+if ($format eq "") {
+  if (@$geneHits < $n) {
+    print p("Showing $kbShown kb around all",
+            commify(scalar(@$geneHits)),
+            $listLabel);
+  } elsif ($hitType eq "top") {
+    print p("Showing $kbShown kb around the top",
+            commify(scalar(@$geneHits)),
+            "hits, out of at least",
+            commify($nTot));
+  } else {
+    print p("Showing $kbShown kb around",
+            commify(scalar(@$geneHits)),
+            "random $listLabel, out of at least",
+            commify($nTot));
+  }
+  print "\n";
+
+  # Show options form
+  my $randomOption = "";
+  print
+    start_form( -name => 'input', -method => 'GET', -action => 'neighbors.cgi' ),
+      geneSeqDescSeqHidden($gene, $seqDesc, $seq),
+      p('Hits to show:',
+        popup_menu(-name => 'n', -values => [25, 50, 100, 150, 200], -default => $n),
+        popup_menu(-name => 'hitType', -values => ["top", "randomAny", "random"],
+                   -labels => { 'top' => 'top hits',
+                                'randomAny' => 'random hits',
+                                'random' => 'random good hits' },
+                   -default => $hitType),
+        "&nbsp;",
+        'Kilobases:', popup_menu(-name => 'kb', -values => [6, 9, 12, 18, 25, 40], -default => $kbShown),
+        "&nbsp;",
+        submit('Change')),
+    end_form;
+
+  my @links = ();
+  if (defined $gene) {
+    push @links, a({-href => "gene.cgi?$options"}, "gene");
+  } else {
+    push @links, a({-href => "seq.cgi?$options"}, "sequence");
+  }
+  push @links, a({-href => "hitTaxa.cgi?$options"},
+                 "taxonomic distribution"). " of its homologs";
+  my $download = small("Or download",
+                       a({ -href => "neighbors.cgi?${options}&format=fasta",
+                           -title => "homologs shown (fasta format)"}, "protein sequences"),
+                       "or",
+                       a({ -href => "neighbors.cgi?${options}&format=tsv",
+                           -title => "all genes shown (tab-delimited)"}, "gene table"));
+
+  print p("Or see", join(" or ", @links).".", $download), "\n";
 }
-push @links, a({-href => "hitTaxa.cgi?$options"},
-               "taxonomic distribution"). " of its homologs";
-print p("Or see", join(" or ", @links)), "\n";
+
+if ($format eq "fasta") {
+  foreach my $hit (@$geneHits) {
+    my $genome = gidToGenome($hit->{gid}) || die;
+    print ">" . join(" ",
+                     $hit->{locusTag},
+                     $hit->{proteinId},
+                     $hit->{bits}, "bits",
+                     int(100 * $hit->{identity} + 0.5) . "%", "identity",
+                     "from",
+                     $genome->{gtdbSpecies}, $genome->{strain},
+                     "assemblyId",
+                     $hit->{gid})."\n";
+    die "No sequence for $hit->{locusTag}" unless $hit->{proteinId} ne "";
+    my ($seq) = getDbHandle()->selectrow_array("SELECT sequence FROM Protein WHERE proteinId = ?",
+                                               {}, $hit->{proteinId});
+    my @seqPieces = $seq =~ /.{1,60}/g;
+    print join("\n", @seqPieces)."\n";
+  }
+  exit(0);
+}
 
 my $nHits = scalar(@$geneHits);
 my $yAt = 5;
@@ -207,6 +274,35 @@ foreach my $hit (@$geneHits) {
     }
   }
 }
+
+if ($format eq "tsv") {
+  my @fields = qw{track gtdbDomain gtdbPhylum gtdbClass gtdbOrder gtdbFamily gtdbGenus gtdbSpecies strain assemblyId
+                  locusTag proteinId scaffoldId begin end strand desc clusterId};
+  print join("\t", @fields)."\n";
+  my $iTrack = 0;
+  foreach my $hit (@$geneHits) {
+    $iTrack++;
+    my $hitGenome = gidToGenome($hit->{gid}) || die;
+    # additional fields for output
+    $hitGenome->{assemblyId} = $hit->{gid};
+    $hitGenome->{track} = $iTrack;
+    my @show = @{ $hit->{showGenes} };
+    @show = reverse @show if $hit->{strand} eq "-";
+    foreach  my $s (@show) {
+      $s->{clusterId} = "";
+      if ($s->{locusTag} eq $hit->{locusTag}) {
+        $s->{clusterId} = "query";
+      } elsif (exists $locusTagToICluster{ $s->{locusTag} }) {
+        $s->{clusterId} = $locusTagToICluster{ $s->{locusTag} };
+      }
+      my @out = map { exists $hitGenome->{$_} ? $hitGenome->{$_} : $s->{$_} } @fields;
+      print join("\t", @out) . "\n";
+    }
+  }
+  exit(0);
+}
+
+die unless $format eq "";
 
 foreach my $hit (@$geneHits) {
   my $hitGenome = gidToGenome($hit->{gid}) || die;
