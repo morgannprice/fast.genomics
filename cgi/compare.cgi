@@ -19,10 +19,18 @@ use lib "../../PaperBLAST/lib";
 use neighborWeb;
 use pbweb qw{commify};
 
-# CGI arguments:
+# required CGI arguments:
 # locus (a locus tag in the database) or seqDesc and seq
-# optional: query2, locus2, or seq2 and seqDesc2
-# optional, if a second protein is specified: format=tsv
+# optional CGI arguments:
+# query2, locus2, or seq2 and seqDesc2 (to specify the 2nd locus)
+# format -- use tsv to download a table
+# For taxon mode:
+# taxLevel -- whic level to tabulate at
+# taxMode -- either "close" or "both"
+# Good -- 1 if considering good hits to both loci only
+
+my $closeKb = 5;
+my $closeNt = $closeKb * 1000;
 
 my $cgi = CGI->new;
 my $tsv = ($cgi->param('format') || "") eq  'tsv';
@@ -30,8 +38,14 @@ my ($gene, $seqDesc, $seq) = getGeneSeqDesc($cgi);
 my $options = geneSeqDescSeqOptions($gene,$seqDesc,$seq); # for 1st gene
 my $hidden = geneSeqDescSeqHidden($gene,$seqDesc,$seq); # for 1st gene
 
+my $taxLevel = $cgi->param('taxLevel');
+my $taxMode = $cgi->param('taxMode') || "both";
+
 unless ($tsv) {
-  start_page(title => 'Compare gene presence/absence');
+  my $title = "Compare gene presence/absence";
+  $title = ($taxMode eq "close" ? "Taxa with both genes nearby" : "Taxa with both genes")
+    if $taxLevel;
+  start_page(title => $title);
   autoflush STDOUT 1; # show preliminary results
 }
 
@@ -72,7 +86,7 @@ if (scalar(@$hits1) == 0) {
 # Handle the second gene options
 my $locus2 = $cgi->param('locus2');
 my $seq2 = $cgi->param('seq2');
-my $seqDesc2 = $cgi->param('desc2');
+my $seqDesc2 = $cgi->param('seqDesc2');
 my $query2 = $cgi->param('query2') || "";
 my $gene2;
 print h3("Second protein") unless $tsv;
@@ -161,6 +175,14 @@ if (scalar(@$hits2) == 0) {
   finish_page;
 }
 
+my $baseURL = "compare.cgi?${options}";
+if ($gene2) {
+  $baseURL .= "&locus2=$gene2->{locusTag}";
+} else {
+  my $seqDesc2E = encode_entities($seqDesc2);
+  $baseURL .= "&seqDesc2=$seqDesc2E&seq2=$seq2";
+}
+
 if ($tsv) {
   print "Content-Type:text/tab-separated-values\n";
   print "Content-Disposition: attachment; filename=compareHomologs.tsv\n\n";
@@ -172,8 +194,179 @@ my $max1 = estimateTopScore($geneHits1->[0], $seq);
 my $geneHits2 = hitsToGenes($hits2);
 my $max2 = estimateTopScore($geneHits2->[0], $seq2);
 print p("Loaded", commify(scalar(@$geneHits1)), "homologs for the first protein",
-        "and", commify(scalar(@$geneHits2)), "homologs for the second protein"), "\n"
+        "and", commify(scalar(@$geneHits2)), "homologs for the second protein."), "\n"
   unless $tsv;
+
+if ($taxLevel) { # taxon distribution mode
+  die "Cannot set tsv with taxLevel" if $tsv;
+  die "Invalid taxLevel"
+    unless $taxLevel eq "phylum" || $taxLevel eq "class" || $taxLevel eq "order" || $taxLevel eq "family";
+  die "Invalid taxMode" unless $taxMode eq "both" || $taxMode eq "close";
+  my $goodOnly = $cgi->param('Good') || 0;
+
+  # All hits by genome
+  my %byg1 = ();
+  foreach my $hit (@$geneHits1) {
+    push @{ $byg1{ $hit->{gid} } }, $hit if !$goodOnly || $hit->{bits} >= $max1 * 0.3;
+  }
+  my %byg2 = ();
+  foreach my $hit (@$geneHits2) {
+    push @{ $byg2{ $hit->{gid} } }, $hit if !$goodOnly || $hit->{bits} >= $max2 * 0.3;
+  }
+
+  my %gid = (); # genome to list of relevant hits
+  if ($taxMode eq "both") {
+    foreach my $gid (keys %byg1) {
+      if (exists $byg2{$gid}) {
+        push @{ $gid{$gid} }, @{ $byg1{$gid} };
+        push @{ $gid{$gid} }, @{ $byg2{$gid} };
+      }
+    }
+  } else { # keep genome only if there's a close pair
+    foreach my $gid (keys %byg1) {
+      next unless exists $byg2{$gid};
+      my %seen = (); # locusTag => 1 if already listed as a gene
+      my $list1 = $byg1{$gid};
+      my $list2 = $byg2{$gid};
+      my $keep = 0;
+      foreach my $hit1 (@$list1) {
+        foreach my $hit2 (@$list2) {
+          if ($hit1->{scaffoldId} eq $hit2->{scaffoldId}
+              && $hit1->{strand} eq $hit2->{strand}
+              && (abs($hit1->{begin} - $hit2->{end}) <= $closeNt
+                  || abs($hit1->{end} - $hit2->{begin}) <= $closeNt)) {
+            push @{ $gid{$gid} }, $hit1 unless exists $seen{ $hit1->{locusTag} };
+            $seen{ $hit1->{locusTag} } = 1;
+            push @{ $gid{$gid} }, $hit2 unless exists $seen{ $hit2->{locusTag} };
+            $seen{ $hit2->{locusTag} } = 1;
+            $keep = 1;
+            last;
+          }
+        }
+        last if $keep;
+      }
+    }
+  }
+
+  my $hitsString = "hits";
+  $hitsString = a({-title => "At least 30% of maximum possible bit score" }, "good hits")
+    if $goodOnly;
+  my $whatString = "for both genes";
+  $whatString = "close by" if $taxMode eq "close";
+  my %taxonPlural = qw{phylum phyla class classes order orders family families};
+  print p("Showing which $taxonPlural{$taxLevel} have", $hitsString, $whatString . ".",
+          "Genomes with",
+          ($goodOnly ? "good hits for" : ""),
+          ($taxMode eq "both" ? "both genes" : "the genes within 5 kb and on the same strand").":",
+          scalar(keys %gid)."."), "\n";
+  my $hidden2;
+  if ($gene2){
+    $hidden2 = qq[<INPUT type="hidden" name="locus2" value="$gene2->{locusTag}">];
+  } else {
+    my $seqDesc2E = encode_entities($seqDesc2);
+    $hidden2 = qq[<INPUT type="hidden" name="seqDesc2" value="$seqDesc2E">]
+      . qq[<INPUT type="hidden" name="seq2" value="$seq2">];
+  }
+  my %modeLabels = ('close' => 'close by' , 'both' => 'both present');
+  print
+    start_form( -name => 'input', -method => 'GET', -action => 'compare.cgi'),
+    $hidden,
+    $hidden2,
+    p("Genes are:",
+      popup_menu(-name => 'taxMode', -values => [qw(close both)],
+                 -default => $taxMode, -labels => \%modeLabels),
+      "&nbsp;",
+      "Level:",
+      popup_menu(-name => 'taxLevel', -values => [ qw(phylum class order family) ],
+                 -default => $taxLevel),
+    "&nbsp;",
+    a({-title => "a good hit has at least 30% of the maximum possible bit score"},
+      checkbox(-name => 'Good', -checked => $goodOnly),
+      "hits only?"),
+    "&nbsp;",
+    submit('Change')),
+  end_form,
+  "\n";
+
+
+  if (scalar(keys %gid) > 0) {
+    my @levelsShow = ("Domain", "Phylum");
+    unless ($taxLevel eq "phylum") {
+      push @levelsShow, "Class";
+      unless ($taxLevel eq "class") {
+        push @levelsShow, "Order";
+        unless ($taxLevel eq "order") {
+          push @levelsShow, "Family";
+        }
+      }
+    }
+    my $genomes = getDbHandle()->selectall_hashref("SELECT * from Genome", "gid");
+    # taxString is each taxon in this list of levels, joined by ";;;"
+    my %taxStringN = ();
+    foreach my $genome (values %$genomes) {
+      $genome->{taxString} = join(";;;", map $genome->{"gtdb".$_}, @levelsShow);
+      $taxStringN{ $genome->{taxString} }++;
+    }
+    my %taxHits = (); # taxString to list of relevant hits
+    while (my ($gid, $hits) = each %gid) {
+      my $genome = $genomes->{ $gid } || die $gid;
+      push @{ $taxHits{$genome->{taxString}} }, @$hits;
+    }
+    # Each row includes taxString, taxLevels, nHitGenomes, nGenomes
+    my @rows = ();
+    while (my ($taxString, $tHits) = each %taxHits) {
+      my $row = { 'taxString' => $taxString };
+      $row->{nGenomes} = $taxStringN{$taxString} || die $taxString;
+      my %gidThis = (); # genome id to 1 if has a hit
+      foreach my $hit (@{ $taxHits{$taxString} }) {
+        $gidThis{ $hit->{gid} } = 1;
+      }
+      $row->{nHitGenomes} = scalar(keys %gidThis);
+      push @rows, $row;
+    }
+    @rows = sort { $b->{nHitGenomes} <=> $a->{nHitGenomes}
+                     || $a->{taxString} cmp $b->{taxString} } @rows;
+    my @header = @levelsShow;
+    $header[0] = "&nbsp;";
+    push @header, "#Genomes";
+    $hitsString = $goodOnly ? "good hits" : "hits";
+    if ($taxMode eq "close") {
+      push @header, a({-title => "#Genomes with $hitsString nearby"}, "#Close");
+    } else {
+      push @header, a({-title => "#Genomes with $hitsString for both genes"}, "#Both");
+    }
+    print qq[<TABLE cellpadding=1 cellspacing=1>], "\n";
+    print Tr(map th($_), @header), "\n";
+    my $iRow = 0;
+    foreach my $row (@rows) {
+      my @out = split /;;;/, $row->{taxString};
+      $out[0] = domainHtml($out[0]);
+      my @tHits = @{ $taxHits{ $row->{taxString} } };
+      my $truncate = 0;
+      my $maxShow = 250;
+      if (@tHits > $maxShow) {
+        $truncate = 1;
+        splice @tHits, $maxShow;
+      }
+      my $URL = "genes.cgi?" . join("&", map "g=" . $_->{locusTag}, @tHits);
+      my $truncateString = $truncate ? " top $maxShow" : "";
+      my $modeString = $taxMode eq "close" ? "close-by" : "co-occurring";
+      my $showNHitGenomes = a({ -href => $URL,
+                                -style => "text-decoration: none;",
+                                -title => "see$truncateString $modeString $hitsString in "
+                                . encode_entities($out[-1]) },
+                              commify($row->{nHitGenomes}));
+      my $bgColor = $iRow++ % 2 == 0 ? "lightgrey" : "white";
+      print Tr({-style => "background-color: $bgColor;"},
+               td(\@out),
+               td({-style => "text-align: right;"},
+                  [ commify($row->{nGenomes}), $showNHitGenomes ])) . "\n";
+    }
+    print "</TABLE>\n";
+  } # end has genomes to show
+  print p("Or see", a({-href => $baseURL}, "plots"), "of bit scores");
+  finish_page();
+} # end taxon distribution mode
 
 # Top hits by genome
 my %byg1 = ();
@@ -208,8 +401,6 @@ foreach my $gid (keys %byg2) {
 my $genomes = getDbHandle()->selectall_hashref("SELECT * FROM Genome", "gid", { Slice => {} });
 my $nGenomes = scalar(keys %$genomes);
 
-my $closeKb = 5;
-my $closeNt = $closeKb * 1000;
 # gid with a hit for either geonme to hash of
 # gid, inBoth, same (gene), close, ratio1, ratio2 (0 if no hit), hit1, hit2
 my %gidScores = ();
@@ -458,16 +649,13 @@ if ($nInBoth > $nSame + 1) {
 }
 print "</TD></TR></TABLE>";
 
-my $seqDesc2e = encode_entities($seqDesc2);
-my $downloadURL = join("&",
-                       "compare.cgi?${options}",
-                       (defined $gene2 ? "locus2=$gene2->{locusTag}"
-                        : "seqDesc2=$seqDesc2e&seq2=$seq2"),
-                       "format=tsv");
+my $downloadURL = "$baseURL&format=tsv";
 print
-  h3("Download"),
-  p("Download a",
-        a({ -href => $downloadURL }, "table"),
+  p("Or see the",
+    a({-href => "$baseURL&taxLevel=phylum&taxMode=both"},
+      "taxonomic distribution of co-occurrence"),
+    "or",
+        a({ -href => $downloadURL }, "download a table"),
         "(tab-delimited)",
        "of the best homolog(s) in each genome");
 finish_page();
