@@ -248,15 +248,15 @@ if ($taxLevel) { # taxon distribution mode
     }
   }
 
-  my $hitsString = "hits";
-  $hitsString = a({-title => "At least 30% of maximum possible bit score" }, "good hits")
+  my $hitsString = "homologs";
+  $hitsString = a({-title => "At least 30% of maximum possible bit score" }, "good homologs")
     if $goodOnly;
   my $whatString = "for both genes";
   $whatString = "nearby" if $taxMode eq "close";
   my %taxonPlural = qw{phylum phyla class classes order orders family families};
   print p("Showing which $taxonPlural{$taxLevel} have", $hitsString, $whatString . ".",
           "Genomes with",
-          ($goodOnly ? "good hits for" : ""),
+          ($goodOnly ? "good homologs for" : ""),
           ($taxMode eq "both" ? "both genes" : "the genes within 5 kb and on the same strand").":",
           scalar(keys %gid)."."), "\n";
   my $hidden2;
@@ -280,9 +280,9 @@ if ($taxLevel) { # taxon distribution mode
       popup_menu(-name => 'taxLevel', -values => [ qw(phylum class order family) ],
                  -default => $taxLevel),
     "&nbsp;",
-    a({-title => "a good hit has at least 30% of the maximum possible bit score"},
+    a({-title => "a good homolog has at least 30% of the maximum possible bit score"},
       checkbox(-name => 'Good', -checked => $goodOnly),
-      "hits only?"),
+      "homologs only?"),
     "&nbsp;",
     submit('Change')),
   end_form,
@@ -329,7 +329,7 @@ if ($taxLevel) { # taxon distribution mode
     my @header = @levelsShow;
     $header[0] = "&nbsp;";
     push @header, "#Genomes";
-    $hitsString = $goodOnly ? "good hits" : "hits";
+    $hitsString = $goodOnly ? "good homologs" : "homologs";
     if ($taxMode eq "close") {
       push @header, a({-title => "#Genomes with $hitsString nearby"}, "#Nearby");
     } else {
@@ -558,7 +558,7 @@ if ($nInBoth > $nSame + 1) {
             "The corresponding bit score thresholds are $thresh1 ($f1% of max)",
             " and $thresh2 ($f2% of max), respectively.",
            "$nCloseThresh of these co-occuring homologs ($fClose%) are nearby (within $closeKb kb and on the same strand).");
-    print p({-style => "font-size: 90%;"}, "Warning: P value is based on the assumption that the two genes appear in genomes independently. If both genes are conserved within a group of related genera, then they will have significant co-occurrence, even if there is no functional relationship between them. Nevertheless, the P value is useful for selecting a threshold.");
+    print p({-style => "font-size: 90%;"}, "Warning: the P value is based on the assumption that the two genes appear in genomes independently. If both genes are conserved within a group of related genera, then they will have significant co-occurrence, even if there is no functional relationship between them. Nevertheless, the P value is useful for selecting a threshold.");
   } else {
     print p("No significant co-occurence");
   }
@@ -654,7 +654,7 @@ print
   p("Or see which taxa have",
     a({-href => "$baseURL&taxLevel=phylum&taxMode=both"},
       "both genes"),
-    "or",
+    "or have",
     a({-href => "$baseURL&taxLevel=phylum&taxMode=close"},
       "the genes nearby,"),
     "or",
