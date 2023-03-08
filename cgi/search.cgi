@@ -94,6 +94,9 @@ The protein of interest need not be in fast.genomics' database.
 <LI><A HREF="neighbors.cgi?locus=ING2E5A_RS06865">Gene neighborhoods</A>
 <LI><A HREF="hitTaxa.cgi?locus=ING2E5A_RS06865">Which taxa contain homologs</A>
 <LI>Compare the <A HREF="compare.cgi?locus=ING2E5A_RS06865&query2=ING2E5A_RS06860">presence/absence</A> of two proteins
+<UL>
+<LI>see which taxa have <A HREF="compare.cgi?locus=ING2E5A_RS06865&locus2=ING2E5A_RS06860&taxLevel=phylum&taxMode=close">two genes nearby</A>
+</UL>
 </UL>
 
 <P style="font-size:90%;">(These examples are for a putative 3-ketoglycoside hydrolase, ING2E5A_RS06865. This family of proteins was formerly known as DUF1080.)</P>

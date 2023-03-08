@@ -252,7 +252,7 @@ if ($taxLevel) { # taxon distribution mode
   $hitsString = a({-title => "At least 30% of maximum possible bit score" }, "good hits")
     if $goodOnly;
   my $whatString = "for both genes";
-  $whatString = "close by" if $taxMode eq "close";
+  $whatString = "nearby" if $taxMode eq "close";
   my %taxonPlural = qw{phylum phyla class classes order orders family families};
   print p("Showing which $taxonPlural{$taxLevel} have", $hitsString, $whatString . ".",
           "Genomes with",
@@ -267,7 +267,7 @@ if ($taxLevel) { # taxon distribution mode
     $hidden2 = qq[<INPUT type="hidden" name="seqDesc2" value="$seqDesc2E">]
       . qq[<INPUT type="hidden" name="seq2" value="$seq2">];
   }
-  my %modeLabels = ('close' => 'close by' , 'both' => 'both present');
+  my %modeLabels = ('close' => 'nearby' , 'both' => 'both present');
   print
     start_form( -name => 'input', -method => 'GET', -action => 'compare.cgi'),
     $hidden,
@@ -331,7 +331,7 @@ if ($taxLevel) { # taxon distribution mode
     push @header, "#Genomes";
     $hitsString = $goodOnly ? "good hits" : "hits";
     if ($taxMode eq "close") {
-      push @header, a({-title => "#Genomes with $hitsString nearby"}, "#Close");
+      push @header, a({-title => "#Genomes with $hitsString nearby"}, "#Nearby");
     } else {
       push @header, a({-title => "#Genomes with $hitsString for both genes"}, "#Both");
     }
@@ -364,7 +364,7 @@ if ($taxLevel) { # taxon distribution mode
     }
     print "</TABLE>\n";
   } # end has genomes to show
-  print p("Or see", a({-href => $baseURL}, "plots"), "of bit scores");
+  print p("Or see", a({-href => $baseURL}, "presence/absence plots"));
   finish_page();
 } # end taxon distribution mode
 
@@ -651,11 +651,14 @@ print "</TD></TR></TABLE>";
 
 my $downloadURL = "$baseURL&format=tsv";
 print
-  p("Or see the",
+  p("Or see which taxa have",
     a({-href => "$baseURL&taxLevel=phylum&taxMode=both"},
-      "taxonomic distribution of co-occurrence"),
+      "both genes"),
     "or",
-        a({ -href => $downloadURL }, "download a table"),
-        "(tab-delimited)",
-       "of the best homolog(s) in each genome");
+    a({-href => "$baseURL&taxLevel=phylum&taxMode=close"},
+      "the genes nearby,"),
+    "or",
+    a({ -href => $downloadURL }, "download a table"),
+    "(tab-delimited)",
+    "of the best homolog(s) in each genome");
 finish_page();
