@@ -176,10 +176,10 @@ if ($format eq "") {
   push @links, a({-href => "hitTaxa.cgi?$options"},
                  "taxonomic distribution"). " of its homologs";
   my $download = small("Downloads:",
-                       a({ -href => "neighbors.cgi?${options}&format=fasta",
+                       a({ -href => "neighbors.cgi?${options}&n=${n}&hitType=${hitType}&format=fasta",
                            -title => "homologs shown (fasta format)"}, "protein sequences"),
                        "or",
-                       a({ -href => "neighbors.cgi?${options}&format=tsv",
+                       a({ -href => "neighbors.cgi?${options}&n=${n}&hitType=${hitType}&kb=${kbShown}&format=tsv",
                            -title => "all genes shown (tab-delimited)"}, "table of genes"));
 
   print p("Or see", join(" or ", @links).".", $download), "\n";
