@@ -5,7 +5,7 @@ use strict;
 
 our (@ISA,@EXPORT);
 @ISA = qw(Exporter);
-@EXPORT = qw(parseTaxString readMMSeqsHits estimateTopScore cumsum);
+@EXPORT = qw(parseTaxString readMMSeqsHits estimateTopScore cumsum featuresToGenes);
 
 # Returns a hash of d/p/c/o/f/g/s to value
 # (any of which could be missing),
@@ -76,4 +76,72 @@ sub cumsum {
     $out[$i] = $tot;
   }
   return @out;
+}
+
+# Given a reference to a list of features, from FetchAssembly::ParseNCBIFeatureFile,
+# return a list of genes.
+# In particular, combine gene and CDS entries into protein-coding genes.
+# Returns a reference to a list of genes, each a hash with the fields
+# scaffoldId, begin, end, strand, locusTag, proteinId, desc;
+# and a reference to a list of warnings.
+sub featuresToGenes($) {
+  my ($features) = @_;
+
+  # The feature file usually has pairs of rows, first a gene entry, then usually a CDS
+  # (even if a pseudogene), or rRNA or ncRNA type entry, which will have the description under "name".
+  # But sometimes the rows are not in order (i.e., two rows for an antisense RNA between
+  # the gene and CDS entries, see BSU_32469 in GCF_000009045.1). Or sometimes
+  # there's no CDS entry at all.
+  # So first, group the entries by locus_tag.
+  my %locusTagFeatures = ();
+  foreach my $feature (@$features) {
+    push @{ $locusTagFeatures{ $feature->{locus_tag} } }, $feature;
+  }
+
+  my @genes;
+  my @warnings;
+
+  foreach my $locus_tag (sort keys %locusTagFeatures) {
+    if ($locus_tag eq "") {
+      push @warnings, "Empty locus_tag";
+      next;
+    }
+    my $list = $locusTagFeatures{$locus_tag};
+    my @geneFeatures = grep $_->{"# feature"} eq "gene", @$list;
+    my @others = grep $_->{"# feature"} ne "gene", @$list;
+    if (@geneFeatures == 0) {
+      push @warnings, "No gene entry for locus_tag $locus_tag";
+      next;
+    }
+    push @warnings, "More than one gene entry for locus_tag $locus_tag"
+      if @geneFeatures > 1;
+    print STDERR "Warning: more than one non-gene entry for locus_tag $locus_tag"
+      if @others > 1;
+    my $feature = $geneFeatures[0];
+    my $other = $others[0]; # or undef
+
+    my $locusTag = $feature->{"locus_tag"};
+    my $proteinId = "";
+    my $desc = "?";
+    if (defined $other) {
+      $desc = $other->{name};
+      $desc = $desc . " (pseudogene)" if $other->{class} eq "without_protein";
+    } else {
+      $desc = "pseudogene" if $feature->{attributes} =~ m/pseudo/i;
+    }
+    # The CDS may have class="with_protein" or empty
+    if ($feature->{class} eq "protein_coding" && defined $other
+        && $other->{"# feature"} eq "CDS"
+        && ($other->{class} eq "with_protein" || $other->{class} eq "")) {
+      $proteinId = $other->{"product_accession"};
+    }
+    push @genes, { 'scaffoldId' => $feature->{"genomic_accession"},
+                   'start' => $feature->{start},
+                   'end' => $feature->{end},
+                   'strand' => $feature->{strand},
+                   'locusTag' => $locusTag,
+                   'proteinId' => $proteinId,
+                   'desc' => $desc };
+  }
+  return (\@genes, \@warnings);
 }
