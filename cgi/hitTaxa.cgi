@@ -17,6 +17,7 @@ use pbweb qw{commify};
 # locus (a locus tag in the database) or seqDesc and seq
 # taxLevel -- defaults to phylum
 # Good -- set if show results for good hits only
+# all -- set to all if show results for all taxa, sorted by taxonomy, instead of sorting by frequency
 
 my $cgi = CGI->new;
 my ($gene, $seqDesc, $seq) = getGeneSeqDesc($cgi);
@@ -27,6 +28,8 @@ die "Unknown taxLevel"
   || $taxLevel eq "order"
   || $taxLevel eq "family";
 my $showGood = $cgi->param('Good') ? 1 : "";
+my $all = $cgi->param('all') || "freq";
+die "Invalid all" unless $all eq "all" || $all eq "freq";
 
 if (defined $gene && ! $seq) {
   # should not be reachable, but redirect to gene page just in case
@@ -74,7 +77,12 @@ print
     popup_menu(-name => 'taxLevel', -values => [ qw(phylum class order family) ], -default => $taxLevel),
     "&nbsp;",
     checkbox(-name => 'Good', -checked => $showGood),
-    "hits only?",
+    "homologs only?",
+    "&nbsp;",
+    "Show:",
+    popup_menu(-name => 'all', -values => [ "all", "freq" ],
+               -labels => { "all" => "all taxa", "freq" => "taxa with homologs" },
+               -default => $all),
     "&nbsp;",
     submit('Change')),
   end_form;
@@ -119,55 +127,84 @@ foreach my $gh (@$geneHits) {
   my $genome = $genomes->{ $gh->{gid} } || die $gh->{gid};
   push @{ $taxHits{$genome->{taxString}} }, $gh;
 }
+
 # Each row includes taxString, taxLevels, nHits, nHitGenomes, nGenomes
-my @rows = ();
-while (my ($taxString, $tHits) = each %taxHits) {
-  my $row = { 'taxString' => $taxString, 'nHits' => scalar(@$tHits) };
-  $row->{nGenomes} = $taxStringN{$taxString} || die $taxString;
-  # Count distinct genomes
-  my %gid = (); # genome id to #hits
-  foreach my $hit (@$tHits) {
-    $gid{ $hit->{gid} }++;
+my @rows;
+if ($all eq "freq") {
+  while (my ($taxString, $tHits) = each %taxHits) {
+    my $row = { 'taxString' => $taxString, 'nHits' => scalar(@$tHits) };
+    $row->{nGenomes} = $taxStringN{$taxString} || die $taxString;
+    # Count distinct genomes
+    my %gid = (); # genome id to #hits
+    foreach my $hit (@$tHits) {
+      $gid{ $hit->{gid} }++;
+    }
+    $row->{nHitGenomes} = scalar(keys %gid);
+    push @rows, $row;
   }
-  $row->{nHitGenomes} = scalar(keys %gid);
-  push @rows, $row;
+  @rows = sort { $b->{nHits} <=> $a->{nHits}
+                   || $a->{taxString} cmp $b->{taxString} } @rows;
+} else {
+  # all mode
+  my $taxa = getTaxa();
+  my @levels = map lc, @levelsShow;
+  foreach my $tax (values %{ $taxa->{$taxLevel} }) {
+    my $levels = taxToParts($tax, $taxa);
+    my $taxString = join(";;;", map $levels->{$_}, @levels);
+    my $nHits = 0;
+    my $nHitGenomes = 0;
+    if (exists $taxHits{$taxString}) {
+      $nHits = scalar(@{ $taxHits{$taxString} });
+      my %gid = map { $_->{gid} => 1 } @{ $taxHits{$taxString} };
+      $nHitGenomes = scalar(keys %gid);
+    }
+    die $taxString unless defined $taxStringN{$taxString};
+    push @rows, { 'taxString' => $taxString,
+                  'nGenomes' => $taxStringN{$taxString},
+                  'nHitGenomes' => $nHitGenomes,
+                  'nHits' => $nHits };
+  }
+  @rows = sort { $a->{taxString} cmp $b->{taxString} } @rows;
 }
-@rows = sort { $b->{nHits} <=> $a->{nHits}
-                 || $a->{taxString} cmp $b->{taxString} } @rows;
+
 my @header = @levelsShow;
 $header[0] = "&nbsp;";
 push @header, ("#Genomes", "# with hits", "#Hits");
 print qq[<TABLE cellpadding=1 cellspacing=1>], "\n";
 print Tr(map th($_), @header), "\n";
 my $iRow = 0;
-my $maxRows = 200;
+my $maxRows;
+$maxRows = 200 if $all eq "freq";
 foreach my $row (@rows) {
   my @out = split /;;;/, $row->{taxString};
   $out[0] = domainHtml($out[0]);
   my $showNHits = commify($row->{nHits});
-  my @tHits = @{ $taxHits{ $row->{taxString} } };
-  my $truncate = 0;
-  my $maxShow = 250;
-  if (@tHits > $maxShow) {
-    $truncate = 1;
-    splice @tHits, $maxShow;
-  }
-  my $URL = "genes.cgi?" . join("&", map "g=" . $_->{locusTag}, @tHits);
-  my $goodString = $showGood ? "good" : "all";
-  my $truncateString = $truncate ? " top $maxShow" : "";
-  $showNHits = a({ -href => $URL,
+  if ($row->{nHits} > 0) {
+    my @tHits;
+    @tHits = @{ $taxHits{ $row->{taxString} } };
+    my $truncate = 0;
+    my $maxShow = 250;
+    if (@tHits > $maxShow) {
+      $truncate = 1;
+      splice @tHits, $maxShow;
+    }
+    my $URL = "genes.cgi?" . join("&", map "g=" . $_->{locusTag}, @tHits);
+    my $goodString = $showGood ? "good" : "all";
+    my $truncateString = $truncate ? " top $maxShow" : "";
+    $showNHits = a({ -href => $URL,
                    -style => "text-decoration: none;",
                    -title => "see$truncateString $goodString hits in " . encode_entities($out[-1]) },
-                 $showNHits);
+                   $showNHits);
+  }
   my $bgColor = $iRow % 2 == 0 ? "lightgrey" : "white";
   print Tr({-style => "background-color: $bgColor;"},
            td(\@out),
            td({-style => "text-align: right;"},
               [ commify($row->{nGenomes}), commify($row->{nHitGenomes}), $showNHits ])) . "\n";
   $iRow++;
-  last if $iRow >= $maxRows;
+  last if defined $maxRows && $iRow >= $maxRows;
 }
 print "</TABLE>\n";
 print p("Table was limited to $maxRows rows")
-  if scalar(@rows) > $maxRows;
+  if defined $maxRows && scalar(@rows) >= $maxRows;
 finish_page();
