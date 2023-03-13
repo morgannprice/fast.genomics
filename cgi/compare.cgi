@@ -25,9 +25,11 @@ use pbweb qw{commify};
 # query2, locus2, or seq2 and seqDesc2 (to specify the 2nd locus)
 # format -- use tsv to download a table
 # For taxon mode:
-# taxLevel -- whic level to tabulate at
+# taxLevel -- which level to tabulate at
 # taxMode -- either "close" or "both"
 # Good -- 1 if considering good hits to both loci only
+# all -- set to "all" to show results for all taxa, sorted by taxonomy
+#   defaults to "freq" -- show only taxa with hits, and sort by frequency of the gene being present
 
 my $closeKb = 5;
 my $closeNt = $closeKb * 1000;
@@ -203,6 +205,8 @@ if ($taxLevel) { # taxon distribution mode
     unless $taxLevel eq "phylum" || $taxLevel eq "class" || $taxLevel eq "order" || $taxLevel eq "family";
   die "Invalid taxMode" unless $taxMode eq "both" || $taxMode eq "close";
   my $goodOnly = $cgi->param('Good') || 0;
+  my $all = $cgi->param('all') || "freq";
+  die "Invalid all" unless $all eq "all" || $all eq "freq";
 
   # All hits by genome
   my %byg1 = ();
@@ -279,15 +283,19 @@ if ($taxLevel) { # taxon distribution mode
       "Level:",
       popup_menu(-name => 'taxLevel', -values => [ qw(phylum class order family) ],
                  -default => $taxLevel),
-    "&nbsp;",
-    a({-title => "a good homolog has at least 30% of the maximum possible bit score"},
-      checkbox(-name => 'Good', -checked => $goodOnly),
-      "homologs only?"),
-    "&nbsp;",
-    submit('Change')),
+      "&nbsp;",
+      a({-title => "a good homolog has at least 30% of the maximum possible bit score"},
+        checkbox(-name => 'Good', -checked => $goodOnly),
+        "homologs only?"),
+      "&nbsp;",
+      "Show:",
+      popup_menu(-name => 'all', -values => [ "all", "freq" ],
+                 -labels => { "all" => "all taxa", "freq" => "taxa with homologs" },
+                 -default => $all),
+      "&nbsp;",
+      submit('Change')),
   end_form,
   "\n";
-
 
   if (scalar(keys %gid) > 0) {
     my @levelsShow = ("Domain", "Phylum");
@@ -314,18 +322,40 @@ if ($taxLevel) { # taxon distribution mode
     }
     # Each row includes taxString, taxLevels, nHitGenomes, nGenomes
     my @rows = ();
-    while (my ($taxString, $tHits) = each %taxHits) {
-      my $row = { 'taxString' => $taxString };
-      $row->{nGenomes} = $taxStringN{$taxString} || die $taxString;
-      my %gidThis = (); # genome id to 1 if has a hit
-      foreach my $hit (@{ $taxHits{$taxString} }) {
-        $gidThis{ $hit->{gid} } = 1;
+    if ($all eq "freq") {
+      while (my ($taxString, $tHits) = each %taxHits) {
+        my $row = { 'taxString' => $taxString };
+        $row->{nGenomes} = $taxStringN{$taxString} || die $taxString;
+        my %gidThis = (); # genome id to 1 if has a hit
+        foreach my $hit (@{ $taxHits{$taxString} }) {
+          $gidThis{ $hit->{gid} } = 1;
+        }
+        $row->{nHitGenomes} = scalar(keys %gidThis);
+        push @rows, $row;
       }
-      $row->{nHitGenomes} = scalar(keys %gidThis);
-      push @rows, $row;
+      @rows = sort { $b->{nHitGenomes} <=> $a->{nHitGenomes}
+                       || $a->{taxString} cmp $b->{taxString} } @rows;
+    } else {
+      # all taxa mode
+      my $taxa = getTaxa();
+      my @levels = map lc, @levelsShow;
+      foreach my $tax (values %{ $taxa->{$taxLevel} }) {
+        my $levels = taxToParts($tax, $taxa);
+        my $taxString = join(";;;", map $levels->{$_}, @levels);
+        my $nHits = 0;
+        my $nHitGenomes = 0;
+        if (exists $taxHits{$taxString}) {
+          my %gids = map { $_->{gid} => 1 } @{ $taxHits{$taxString} };
+          $nHitGenomes = scalar(keys %gids);
+        }
+        die $taxString unless defined $taxStringN{$taxString};
+        push @rows, { 'taxString' => $taxString,
+                      'nGenomes' => $taxStringN{$taxString},
+                      'nHitGenomes' => $nHitGenomes };
+      }
+      @rows = sort { $a->{taxString} cmp $b->{taxString} } @rows;
     }
-    @rows = sort { $b->{nHitGenomes} <=> $a->{nHitGenomes}
-                     || $a->{taxString} cmp $b->{taxString} } @rows;
+
     my @header = @levelsShow;
     $header[0] = "&nbsp;";
     push @header, "#Genomes";
@@ -341,26 +371,31 @@ if ($taxLevel) { # taxon distribution mode
     foreach my $row (@rows) {
       my @out = split /;;;/, $row->{taxString};
       $out[0] = domainHtml($out[0]);
-      my @tHits = @{ $taxHits{ $row->{taxString} } };
-      my $truncate = 0;
-      my $maxShow = 250;
-      if (@tHits > $maxShow) {
-        $truncate = 1;
-        splice @tHits, $maxShow;
+      my $showNHit;
+      if (exists $taxHits{ $row->{taxString} }) {
+        my @tHits = @{ $taxHits{ $row->{taxString} } };
+        my $truncate = 0;
+        my $maxShow = 250;
+        if (@tHits > $maxShow) {
+          $truncate = 1;
+          splice @tHits, $maxShow;
+        }
+        my $URL = "genes.cgi?" . join("&", map "g=" . $_->{locusTag}, @tHits);
+        my $truncateString = $truncate ? " top $maxShow" : "";
+        my $modeString = $taxMode eq "close" ? "close-by" : "co-occurring";
+        $showNHit = a({ -href => $URL,
+                        -style => "text-decoration: none;",
+                        -title => "see$truncateString $modeString $hitsString in "
+                        . encode_entities($out[-1]) },
+                      commify($row->{nHitGenomes}));
+      } else {
+        $showNHit = "0";
       }
-      my $URL = "genes.cgi?" . join("&", map "g=" . $_->{locusTag}, @tHits);
-      my $truncateString = $truncate ? " top $maxShow" : "";
-      my $modeString = $taxMode eq "close" ? "close-by" : "co-occurring";
-      my $showNHitGenomes = a({ -href => $URL,
-                                -style => "text-decoration: none;",
-                                -title => "see$truncateString $modeString $hitsString in "
-                                . encode_entities($out[-1]) },
-                              commify($row->{nHitGenomes}));
       my $bgColor = $iRow++ % 2 == 0 ? "lightgrey" : "white";
       print Tr({-style => "background-color: $bgColor;"},
                td(\@out),
                td({-style => "text-align: right;"},
-                  [ commify($row->{nGenomes}), $showNHitGenomes ])) . "\n";
+                  [ commify($row->{nGenomes}), $showNHit ])) . "\n";
     }
     print "</TABLE>\n";
   } # end has genomes to show
