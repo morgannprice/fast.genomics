@@ -28,7 +28,8 @@ our (@ISA,@EXPORT);
              locusTagToGene getNearbyGenes gidToGenome
              showSequence formatFastaHtml proteinAnalysisLinks
              clusterGenes
-             domainHtml};
+             domainHtml
+             getTaxa taxToParts };
 
 my $dbh = undef;
 sub getDbHandle() {
@@ -535,5 +536,38 @@ sub domainHtml($) {
   return qq[<a title="$domain" style="color: ${domainColor}; text-decoration: none;">$domainChar</a>];
 }
 
+# Returns a hash of level => taxon => row from Taxon table
+sub getTaxa {
+  my $taxa = getDbHandle()->selectall_arrayref("SELECT * from Taxon", { Slice => {} });
+  # assume level x taxon is unique
+  my %taxa = (); # level => taxon => row
+  foreach my $tax (@$taxa) {
+    $taxa{ $tax->{level} }{ $tax->{taxon} } = $tax;
+  }
+  return \%taxa;
+}
+
+my @levelsOrdered = qw{domain phylum class order family genus species};
+my %levelToParent = map { $levelsOrdered[$_] => $levelsOrdered[$_-1] } (1..6);
+
+# Given a row from the Taxon table and the taxa hash (from gettaxa),
+# returns a hash of level => taxon for this taxon and all its parents
+sub taxToParts($$) {
+  my ($tax, $taxa) = @_;
+  my %out = ();
+  for(;;) {
+    $out{ $tax->{level} } = $tax->{taxon};
+    if ($tax->{parent} eq "") {
+      last;
+    } else {
+      my $level = $levelToParent{ $tax->{level} } || die $tax->{level};
+      my $parent = $tax->{parent};
+      die "No taxon for $parent at level $level"
+        unless exists $taxa->{$level}{$parent};
+      $tax = $taxa->{$level}{$parent};
+    }
+  }
+  return \%out;
+}
 
 1;
