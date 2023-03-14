@@ -17,6 +17,7 @@ use pbweb qw{commify};
 # taxon and level -- which taxon to show information about
 #   (level must be one of domain phylum class order family genus species)
 # optional arguments: format = tsv or faa
+
 my $cgi = CGI->new;
 my $taxon = $cgi->param('taxon') || die "Must specify taxon";
 my $level = $cgi->param('level') || die "Must specify level";
@@ -63,11 +64,11 @@ if ($level eq "species" || $taxObj->{nGenomes} == 1) {
 }
 print "\n";
 
-if ($level eq "domain") {
-  my $other = $taxon eq "Bacteria" ? "Archaea" : "Bacteria";
-  print p("Or see domain", a({-href => "taxon.cgi?level=domain&taxon=$other"}, $other)),
-          "\n";
-}
+print p(start_form(-name => 'input', -method => 'GET', -action => 'findTaxon.cgi'),
+        "Or find taxon",
+        textfield(-name => 'query', -size => 20, -maxlength => 1000, -value => ''),
+        submit('Search'),
+        end_form);
 
 my $childLevel = taxLevelToChild($level);
 my $children = [];
@@ -93,6 +94,6 @@ if (@$children > 0) {
   }
   print "</TABLE>";
   print p({-style => "font-size:smaller;"},
-          "Only taxa that have high-quality genomes are included in fast.genomics");
+          "Only taxa that have high-quality genomes are included in <i>fast.genomics</i>");
 }
 finish_page();
