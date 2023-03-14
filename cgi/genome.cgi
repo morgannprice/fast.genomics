@@ -60,6 +60,7 @@ print p("NCBI assembly name:", encode_entities($genome->{assemblyName}));
 print p("GTDB taxonomy:",
         join(", ",
            map a({ -title => lc($_),
+                   -style => "text-decoration: none;",
                    -href => "taxon.cgi?level=".lc($_)."&taxon="
                    . uri_escape($genome->{"gtdb" . $_}) },
                  encode_entities($genome->{"gtdb" . $_})),
@@ -69,17 +70,20 @@ my @ncbi = map { s/^[a-z]__//; $_ } split /;/, $genome->{ncbiTaxonomy};
 @ncbi = grep $_ ne "", @ncbi;
 print p("NCBI taxonomy:",
         join(", ",
-             map a({-href => "https://www.ncbi.nlm.nih.gov/taxonomy/?term=" . uri_escape($_)},
+             map a({-href => "https://www.ncbi.nlm.nih.gov/taxonomy/?term=" . uri_escape($_),
+                    -style => "text-decoration: none;"},
                    encode_entities($_)), @ncbi));
 
 my ($nScaffolds) = getDbHandle()->selectrow_array("SELECT COUNT(DISTINCT scaffoldId) FROM Gene WHERE gid = ?",
                                                   {}, $gid);
 print p("Scaffolds:", commify($nScaffolds),
         "Genes:",
-        a({-href => "genome.cgi?gid=$gid&format=tsv", -title => "tab-delimited table"},
+        a({-href => "genome.cgi?gid=$gid&format=tsv", -title => "tab-delimited table",
+           -style => "text-decoration: none;"},
           commify($genome->{nGenes})),
         "Protein-coding:",
-        a({-href => "genome.cgi?gid=$gid&format=faa", -title => "fasta protein sequences" },
+        a({-href => "genome.cgi?gid=$gid&format=faa", -title => "fasta protein sequences",
+           -style => "text-decoration: none;"},
           commify($genome->{nProteins})));
 
 finish_page();

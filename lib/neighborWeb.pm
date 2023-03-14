@@ -296,7 +296,7 @@ sub start_page {
   print
     CGI::header(-charset => 'utf-8'),
     CGI::start_html(-head => CGI::Link({-rel => "shortcut icon", -href => "../static/favicon.ico"}),
-               -title => $title eq "" ? "fast.genomics" : "fast.genomics: $title"),
+               -title => $title eq "" ? "fast.genomics" : $title),
     TopDivHtml($banner, $bannerURL),
     pbweb::GetMotd(),
     $title ? CGI::h2($title) : "",
