@@ -534,7 +534,8 @@ sub domainHtml($) {
     if ref $domain;
   my $domainChar = $domain eq "Bacteria" ? "B" : "A";
   my $domainColor = $domainChar eq "B" ? "blue" : "green";
-  return qq[<a title="$domain" style="color: ${domainColor}; text-decoration: none;">$domainChar</a>];
+  my $URL = "taxon.cgi?level=domain&taxon=$domain";
+  return qq[<a title="$domain" style="color: ${domainColor}; text-decoration: none;" href="$URL">$domainChar</a>];
 }
 
 # Returns a hash of level => taxon => row from Taxon table
