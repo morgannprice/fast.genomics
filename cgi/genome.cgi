@@ -59,10 +59,14 @@ print p("NCBI assembly name:", encode_entities($genome->{assemblyName}));
 
 print p("GTDB taxonomy:",
         join(", ",
-           map a({-title => lc($_)}, encode_entities($genome->{"gtdb" . $_})),
+           map a({ -title => lc($_),
+                   -href => "taxon.cgi?level=".lc($_)."&taxon="
+                   . uri_escape($genome->{"gtdb" . $_}) },
+                 encode_entities($genome->{"gtdb" . $_})),
              qw[Domain Phylum Class Order Family Genus Species]));
 
 my @ncbi = map { s/^[a-z]__//; $_ } split /;/, $genome->{ncbiTaxonomy};
+@ncbi = grep $_ ne "", @ncbi;
 print p("NCBI taxonomy:",
         join(", ",
              map a({-href => "https://www.ncbi.nlm.nih.gov/taxonomy/?term=" . uri_escape($_)},
