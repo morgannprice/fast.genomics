@@ -169,7 +169,9 @@ if ($all eq "freq") {
 
 my @header = @levelsShow;
 $header[0] = "&nbsp;";
-push @header, ("#Genomes", "# with hits", "#Hits");
+push @header, ("#Genomes", "# with hits", "#Hits",
+               a({-title => "Bit score ratio for the best homolog from this group of genomes"},
+                 "Max ratio"));
 print qq[<TABLE cellpadding=1 cellspacing=1>], "\n";
 print Tr(map th($_), @header), "\n";
 my $iRow = 0;
@@ -185,9 +187,14 @@ foreach my $row (@rows) {
                  encode_entities($out[$i]));
   }
   my $showNHits = commify($row->{nHits});
+  my $showRatio = "&nbsp;";
   if ($row->{nHits} > 0) {
-    my @tHits;
-    @tHits = @{ $taxHits{ $row->{taxString} } };
+    my @tHits = @{ $taxHits{ $row->{taxString} } };
+    my $maxBits = 0;
+    foreach my $hit (@tHits) {
+      $maxBits = $hit->{bits} if $hit->{bits} > $maxBits;
+    }
+    $showRatio = sprintf("%.2f", $maxBits / $maxScore);
     my $truncate = 0;
     my $maxShow = 250;
     if (@tHits > $maxShow) {
@@ -210,7 +217,7 @@ foreach my $row (@rows) {
            td({-style => "text-align: right;"},
               [ commify($row->{nGenomes}),
                 $row->{nHitGenomes} > 0 ? commify($row->{nHitGenomes}) : "&nbsp;",
-                $showNHits ])) . "\n";
+                $showNHits, $showRatio ])) . "\n";
   $iRow++;
   last if defined $maxRows && $iRow >= $maxRows;
 }

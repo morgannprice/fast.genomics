@@ -222,12 +222,14 @@ if ($taxLevel) { # taxon distribution mode
     push @{ $byg2{ $hit->{gid} } }, $hit if !$goodOnly || $hit->{bits} >= $max2 * 0.3;
   }
 
-  my %gid = (); # genome to list of relevant hits
+  # genome to list of relevant hits
+  my %gid1 = ();
+  my %gid2 = ();
   if ($taxMode eq "both") {
     foreach my $gid (keys %byg1) {
       if (exists $byg2{$gid}) {
-        push @{ $gid{$gid} }, @{ $byg1{$gid} };
-        push @{ $gid{$gid} }, @{ $byg2{$gid} };
+        push @{ $gid1{$gid} }, @{ $byg1{$gid} };
+        push @{ $gid2{$gid} }, @{ $byg2{$gid} };
       }
     }
   } else { # keep genome only if there's a close pair
@@ -243,9 +245,9 @@ if ($taxLevel) { # taxon distribution mode
               && $hit1->{strand} eq $hit2->{strand}
               && (abs($hit1->{begin} - $hit2->{end}) <= $closeNt
                   || abs($hit1->{end} - $hit2->{begin}) <= $closeNt)) {
-            push @{ $gid{$gid} }, $hit1 unless exists $seen{ $hit1->{locusTag} };
+            push @{ $gid1{$gid} }, $hit1 unless exists $seen{ $hit1->{locusTag} };
             $seen{ $hit1->{locusTag} } = 1;
-            push @{ $gid{$gid} }, $hit2 unless exists $seen{ $hit2->{locusTag} };
+            push @{ $gid2{$gid} }, $hit2 unless exists $seen{ $hit2->{locusTag} };
             $seen{ $hit2->{locusTag} } = 1;
             $keep = 1;
             last;
@@ -266,7 +268,7 @@ if ($taxLevel) { # taxon distribution mode
           "Genomes with",
           ($goodOnly ? "good homologs for" : ""),
           ($taxMode eq "both" ? "both genes" : "the genes within 5 kb and on the same strand").":",
-          scalar(keys %gid)."."), "\n";
+          scalar(keys %gid1)."."), "\n";
   my $hidden2;
   if ($gene2){
     $hidden2 = qq[<INPUT type="hidden" name="locus2" value="$gene2->{locusTag}">];
@@ -301,7 +303,7 @@ if ($taxLevel) { # taxon distribution mode
   end_form,
   "\n";
 
-  if (scalar(keys %gid) > 0) {
+  if (scalar(keys %gid1) > 0) {
     my @levelsShow = ("Domain", "Phylum");
     unless ($taxLevel eq "phylum") {
       push @levelsShow, "Class";
@@ -315,14 +317,17 @@ if ($taxLevel) { # taxon distribution mode
     my $genomes = getDbHandle()->selectall_hashref("SELECT * from Genome", "gid");
     # taxString is each taxon in this list of levels, joined by ";;;"
     my %taxStringN = ();
+    my %taxStringGid = (); # taxString to list of gid
     foreach my $genome (values %$genomes) {
       $genome->{taxString} = join(";;;", map $genome->{"gtdb".$_}, @levelsShow);
       $taxStringN{ $genome->{taxString} }++;
+      push @{ $taxStringGid{ $genome->{taxString} } }, $genome->{gid};
     }
     my %taxHits = (); # taxString to list of relevant hits
-    while (my ($gid, $hits) = each %gid) {
+    while (my ($gid, $hits) = each %gid1) {
       my $genome = $genomes->{ $gid } || die $gid;
       push @{ $taxHits{$genome->{taxString}} }, @$hits;
+      push @{ $taxHits{$genome->{taxString}} }, @{ $gid2{$gid} };
     }
     # Each row includes taxString, taxLevels, nHitGenomes, nGenomes
     my @rows = ();
@@ -369,6 +374,12 @@ if ($taxLevel) { # taxon distribution mode
     } else {
       push @header, a({-title => "#Genomes with $hitsString for both genes"}, "#Both");
     }
+    my $homologString = $goodOnly ? "good homologs" : "homologs";
+    push @header,
+      map(a({-title => "Bit score ratio for the best homolog of protein $_, among "
+             . ($taxMode eq "close" ? "nearby pairs of $homologString"
+                : "genomes with $homologString for both") },
+         "Max ratio$_"), 1..2);
     print qq[<TABLE cellpadding=1 cellspacing=1>], "\n";
     print Tr(map th($_), @header), "\n";
     my $iRow = 0;
@@ -382,8 +393,22 @@ if ($taxLevel) { # taxon distribution mode
                      encode_entities($out[$i]));
       }
       my $showNHit;
+      my $showMax1 = "&nbsp;";
+      my $showMax2 = "&nbsp;";
       if (exists $taxHits{ $row->{taxString} }) {
         my @tHits = @{ $taxHits{ $row->{taxString} } };
+        my @maxBits; # 1 => max bits1, 2 => max bits2
+        foreach my $i (1,2) {
+          my $gidI = $i == 1 ? \%gid1 : \%gid2;
+          $maxBits[$i] = 0;
+          foreach my $gid (@{ $taxStringGid{$row->{taxString}} }) {
+            foreach my $hit (@{ $gidI->{$gid} }) {
+              $maxBits[$i] = $hit->{bits} if $hit->{bits} > $maxBits[$i];
+            }
+          }
+        }
+        $showMax1 = sprintf("%.2f", $maxBits[1] / $max1);
+        $showMax2 = sprintf("%.2f", $maxBits[2] / $max2);
         my $truncate = 0;
         my $maxShow = 250;
         if (@tHits > $maxShow) {
@@ -401,11 +426,12 @@ if ($taxLevel) { # taxon distribution mode
       } else {
         $showNHit = "&nbsp;";
       }
+      
       my $bgColor = $iRow++ % 2 == 0 ? "lightgrey" : "white";
       print Tr({-style => "background-color: $bgColor;"},
                td(\@out),
                td({-style => "text-align: right;"},
-                  [ commify($row->{nGenomes}), $showNHit ])) . "\n";
+                  [ commify($row->{nGenomes}), $showNHit, $showMax1, $showMax2 ])) . "\n";
     }
     print "</TABLE>\n";
   } # end has genomes to show
