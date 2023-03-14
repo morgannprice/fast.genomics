@@ -97,7 +97,10 @@ if ($format eq "") {
 if (defined $gene) {
   print p(a({-href => "gene.cgi?locus=$locusTag"}, "$locusTag"),
           "from",
-          i($genome->{gtdbSpecies}), $genome->{strain}.":",
+          a({ -href => "genome.cgi?gid=$genome->{gid}" },
+              i(encode_entities($genome->{gtdbSpecies})),
+              encode_entities($genome->{strain}))
+          .":",
           encode_entities($gene->{desc}))
     if $format eq "";;
 }
@@ -306,7 +309,7 @@ die unless $format eq "";
 
 foreach my $hit (@$geneHits) {
   my $hitGenome = gidToGenome($hit->{gid}) || die;
-  my $genomeURL = encode_entities("https://www.ncbi.nlm.nih.gov/assembly/$hitGenome->{gid}/");
+  my $genomeURL = encode_entities("genome.cgi?gid=$hit->{gid}");
   $yAt += 25; # make space for genome label
   my $identity = int(100 * $hit->{identity} + 0.5);
   my $qShow = $locusTag || "query";
@@ -317,15 +320,23 @@ foreach my $hit (@$geneHits) {
     . " is ${identity}% identical to $hit->{sBegin}:$hit->{sEnd}/$nHitAA of $hit->{locusTag} (E = $eValue)";
   my $domainChar = $hitGenome->{gtdbDomain} eq "Bacteria" ? "B" : "A";
   my $domainColor = $domainChar eq "B" ? "blue" : "green";
+  my @lineage = ();
+  foreach my $level (qw{phylum class order family}) {
+    my $taxon = $hitGenome->{"gtdb" . capitalize($level)};
+    my $taxonURL = encode_entities("taxon.cgi?level=$level&taxon=".uri_escape($taxon));
+    push @lineage, qq[<a xlink:href=$taxonURL><tspan font-size="75%">$taxon</tspan></a>];
+  }
   push @svgLines,
     qq[<text x="0" y="$yAt" font-size="90%"><title>$hitDetails</title>${identity}% id, $hit->{bits} bits</text>],
     qq[<text x="150" y="$yAt" font-family="bold" font-size="90%" fill=$domainColor>],
     qq[<title>$hitGenome->{gtdbDomain}</title>$domainChar</text>],
-    qq[<a xlink:href="$genomeURL">],
     qq[<text x="165" y="$yAt">],
-    qq[<title>$hitGenome->{gtdbSpecies} strain $hitGenome->{strain} ($hitGenome->{gid})</title>],
-    qq[<tspan font-size="75%"> $hitGenome->{gtdbPhylum} $hitGenome->{gtdbClass} $hitGenome->{gtdbOrder} $hitGenome->{gtdbFamily}</tspan>],
-    qq[<tspan font-style="italic" font-size="90%">$hitGenome->{gtdbSpecies}</tspan></text></a>];
+    @lineage,
+    qq[<a xlink:href="$genomeURL">],
+    qq[<tspan font-style="italic" font-size="90%">],
+    qq[<title>strain $hitGenome->{strain} ($hitGenome->{gid})</title>],
+    encode_entities($hitGenome->{gtdbSpecies}),
+    qq[</tspan></a></text>];
   $yAt += 6;
   my $mid = ($hit->{begin} + $hit->{end})/2;
   my $showBegin = $mid - $ntShown/2;
