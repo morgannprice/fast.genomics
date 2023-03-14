@@ -40,22 +40,12 @@ autoflush STDOUT 1; # show preliminary results
 my %query = parseGeneQuery($query);
 if (!defined $query{genes} && !defined $query{seq}) {
   print p(b($query{error})) if $query{error};
-  print start_form( -name => 'input', -method => 'GET', -action => 'search.cgi' ),
-    p("Enter an identifier from UniProt, RefSeq, PDB, or MicrobesOnline,",
-      br(),
-      "or a protein sequence in FASTA or Uniprot format,",
-      br(),
-      "or a genus name and a protein description",
-      br(),
-      textarea( -name  => 'query', -value => '', -cols  => 80, -rows  => 4 ),
-      br(),
-      br(),
-      submit('Search')),
-    end_form;
   my @examples = ("ING2E5A_RS06865",
+                  "P0A884",
                   "3osdA",
                   "Escherichia thymidylate synthase");
-  my @exampleLabels = ("by locus tag", "by Protein Data Bank entry", "by genus and description");
+  my @exampleLabels = ("by locus tag", "by UniProt accession or name",
+                       "by Protein Data Bank entry", "by genus and description");
   my @exampleLinks = ();
   for (my $i = 0; $i < scalar(@examples); $i++) {
     push @exampleLinks, a({ -href => "search.cgi?query=" . uri_escape($examples[$i]),
@@ -63,15 +53,35 @@ if (!defined $query{genes} && !defined $query{seq}) {
                             -title => $exampleLabels[$i] },
                           $examples[$i]);
   }
-  print p({-style => "font-size: 90%;"},
-          "Example searches:", join(", ", @exampleLinks));
+  print start_form( -name => 'input', -method => 'GET', -action => 'search.cgi' ),
+    p(b("Enter an identifier, a protein sequence, or a genus name and a protein description"),
+      br(),
+      span({-style => "margin-left: 20pt; font-size: 90%;"},
+           "examples:", join(", ", @exampleLinks)),
+      br(),
+      textarea( -name  => 'query', -value => '', -cols  => 80, -rows  => 4 ),
+      br(),
+      qq{<input type="submit" value="Protein search" style="margin-top: 4pt;" />}),
+    end_form;
+
+  print p(start_form(-name => 'input', -method => 'GET', -action => 'findTaxon.cgi'),
+          "Or search for a taxon:",
+        qq{<INPUT name='query' type='text' size=20 maxlength=1000 />},
+        submit('Taxon search'),
+        br(),
+        span({-style => "font-size:smaller;"}, "use % for wild cards"),
+        end_form);
+
   my ($nGenomes) = getDbHandle()->selectrow_array("SELECT COUNT(*) FROM Genome");
   $nGenomes = commify($nGenomes);
+  my $domains = getDbHandle()->selectcol_arrayref("SELECT taxon FROM Taxon WHERE level = ?", {}, "domain");
+  my $domainsString = join(" and ", map a({-href => "taxon.cgi?level=domain&taxon=$_"}, $_), @$domains);
+
   print <<END
 <H3>About <i>fast.genomics</i></H3>
 
-<P>Fast.genomics includes representative genomes for $nGenomes genera
-of Bacteria and Archaea. These were classified by using
+<P><i>Fast.genomics</i> includes representative genomes for $nGenomes genera of $domainsString.
+These were classified by using
 the <A HREF="https://gtdb.ecogenomic.org/">Genome Tree Database</A>.
 Only high-quality genomes are included. Potential chimeras were excluded using
 <A HREF="https://genomebiology.biomedcentral.com/articles/10.1186/s13059-021-02393-0">GUNC</A>.
@@ -79,7 +89,7 @@ Where possible, genomes were
 taken from NCBI's <A
 HREF="https://www.ncbi.nlm.nih.gov/refseq/">RefSeq</A>.
 
-<P>Fast.genomics uses <A
+<P><i>Fast.genomics</i> uses <A
 HREF="https://github.com/soedinglab/MMseqs2">mmseqs2</A> to find
 homologs for a protein sequence of interest. This usually takes a few
 seconds. To speed up the search, fast.genomics splits the protein database into pieces,

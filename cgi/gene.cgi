@@ -36,15 +36,16 @@ my $gid = $gene->{gid};
 my $genome = gidToGenome($gid) || die "Cannot find genome $gid";
 
 my @lines = ();
-push @lines, "Genome: " . i($genome->{gtdbSpecies}) . " " . $genome->{strain}
+push @lines, "Genome: "
+  . a({-href => "genome.cgi?gid=$gid"}, i($genome->{gtdbSpecies}) . " " . $genome->{strain})
   . " " . small("(" . a({-title => "$gid at NCBI",
               -href => "https://www.ncbi.nlm.nih.gov/assembly/$gid/" }, $gid) . ")");
-push @lines, "Lineage: " . join(" : ",
-                                $genome->{gtdbDomain},
-                                $genome->{gtdbPhylum},
-                                $genome->{gtdbClass},
-                                $genome->{gtdbOrder},
-                                $genome->{gtdbFamily});
+push @lines, "Lineage: "
+  . join(" : ",
+         map a({ -href => "taxon.cgi?level=" . lc($_) . "&taxon=" . $genome->{"gtdb".$_},
+                 -title => lc($_) },
+               $genome->{"gtdb".$_}),
+         qw{Domain Phylum Class Order Family});
 push @lines, "Description: " . encode_entities($gene->{desc}) if $gene->{desc} ne "";
 my $seq;
 if ($gene->{proteinId} ne "") {
