@@ -37,11 +37,13 @@ autoflush STDOUT 1; # show preliminary results
 if ($constGenome) {
   print p("Lineage:",
           domainHtml($constGenome),
-          $constGenome->{gtdbPhylum},
-          $constGenome->{gtdbClass},
-          $constGenome->{gtdbOrder},
-          $constGenome->{gtdbFamily},
-          i($constGenome->{gtdbSpecies}),
+          map(a({-href => "taxon.cgi?level=".lc($_)."&taxon=" . uri_escape($constGenome->{"gtdb$_"}),
+                 -title => lc($_),
+                 -style => "text-decoration: none;"}, $constGenome->{"gtdb$_"}),
+                qw{Phylum Class Order Family}),
+          a({-href => "genome.cgi?gid=$constGenome->{gid}",
+             -style => "text-decoration:none;"},
+            i($constGenome->{gtdbSpecies})),
           $constGenome->{strain});
   print "<TABLE cellpadding=1 cellspacing=1>\n";
   my @header = qw{Locus Protein Description Begin End Strand};
