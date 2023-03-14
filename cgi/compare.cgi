@@ -64,7 +64,9 @@ else {
     print p(a({-href => "gene.cgi?$options"}, $gene->{locusTag}) . ":",
             encode_entities($gene->{desc}),
             br(),
-            "from", i($genome->{gtdbSpecies}), encode_entities($genome->{strain}));
+            "from",
+            a({-href => "genome.cgi?gid=$genome->{gid}", -style => "text-decoration:none;"},
+              i($genome->{gtdbSpecies}), encode_entities($genome->{strain})));
   } else {
     print p(a({-href => "seq.cgi?$options"}, encode_entities($seqDesc)));
   }
@@ -155,7 +157,9 @@ if ($tsv) {
     print p(a({-href => "gene.cgi?$options2"}, $gene2->{locusTag}) . ":",
             encode_entities($gene2->{desc}),
             br(),
-            "from", i($genome->{gtdbSpecies}), encode_entities($genome->{strain}));
+            "from",
+            a({-href => "genome.cgi?gid=".$genome->{gid}, -style => "text-decoration: none;"},
+              i($genome->{gtdbSpecies}), encode_entities($genome->{strain})));
   } else {
     print p(a({-href => "seq.cgi?$options2"}, encode_entities($seqDesc2)));
   }
@@ -369,8 +373,14 @@ if ($taxLevel) { # taxon distribution mode
     print Tr(map th($_), @header), "\n";
     my $iRow = 0;
     foreach my $row (@rows) {
-      my @out = split /;;;/, $row->{taxString};
+      my @lineage = split /;;;/, $row->{taxString};
+      my @out = @lineage;
       $out[0] = domainHtml($out[0]);
+      for (my $i = 1; $i < scalar(@levelsShow); $i++) {
+        $out[$i] = a({-href => "taxon.cgi?level=".lc($levelsShow[$i])."&taxon=".uri_escape($out[$i]),
+                      -style => "text-decoration:none;"},
+                     encode_entities($out[$i]));
+      }
       my $showNHit;
       if (exists $taxHits{ $row->{taxString} }) {
         my @tHits = @{ $taxHits{ $row->{taxString} } };
@@ -385,11 +395,11 @@ if ($taxLevel) { # taxon distribution mode
         my $modeString = $taxMode eq "close" ? "close-by" : "co-occurring";
         $showNHit = a({ -href => $URL,
                         -style => "text-decoration: none;",
-                        -title => "see$truncateString $modeString $hitsString in "
-                        . encode_entities($out[-1]) },
+                        -title => "see$truncateString $modeString $hitsString in $row->{nHitGenomes} "
+                        . encode_entities($lineage[-1]) },
                       commify($row->{nHitGenomes}));
       } else {
-        $showNHit = "0";
+        $showNHit = "&nbsp;";
       }
       my $bgColor = $iRow++ % 2 == 0 ? "lightgrey" : "white";
       print Tr({-style => "background-color: $bgColor;"},
@@ -592,7 +602,7 @@ if ($nInBoth > $nSame + 1) {
             "(Fisher's exact test, 1-sided, with Bonferonni correction).",
             "The corresponding bit score thresholds are $thresh1 ($f1% of max)",
             " and $thresh2 ($f2% of max), respectively.",
-           "$nCloseThresh of these co-occuring homologs ($fClose%) are nearby (within $closeKb kb and on the same strand).");
+           "$nCloseThresh of these co-occurring homologs ($fClose%) are nearby (within $closeKb kb and on the same strand).");
     print p({-style => "font-size: 90%;"}, "Warning: the P value is based on the assumption that the two genes appear in genomes independently. If both genes are conserved within a group of related genera, then they will have significant co-occurrence, even if there is no functional relationship between them. Nevertheless, the P value is useful for selecting a threshold.");
   } else {
     print p("No significant co-occurence");

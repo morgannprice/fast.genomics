@@ -64,15 +64,14 @@ if ($constGenome) {
 } else {
   foreach my $gene (@genes) {
     my $genome = gidToGenome($gene->{gid}) || die $gene->{gid};
-    my $species = $genome->{gtdbSpecies};
-    $species =~ s/^\S+ //;
     print p(domainHtml($genome),
-            small($genome->{gtdbPhylum}),
-            small($genome->{gtdbClass}),
-            small($genome->{gtdbOrder}),
-            small($genome->{gtdbFamily}),
-            i($genome->{gtdbGenus}),
-            i($species),
+            map(a({ -href => "taxon.cgi?level=".lc($_)."&taxon=" . uri_escape($genome->{"gtdb$_"}),
+                    -title => lc($_),
+                    -style => "text-decoration: none;"}, $genome->{"gtdb$_"}),
+                qw{Phylum Class Order Family}),
+            a({-href => "genome.cgi?gid=$genome->{gid}",
+               -style => "text-decoration:none;"},
+              i($genome->{gtdbSpecies})),
             $genome->{strain},
             br(),
             a({-href => "gene.cgi?locus=$gene->{locusTag}"}, $gene->{locusTag}),
