@@ -29,7 +29,8 @@ our (@ISA,@EXPORT);
              showSequence formatFastaHtml proteinAnalysisLinks
              clusterGenes
              domainHtml
-             getTaxa taxToParts };
+             getTaxa taxLevels taxToParts taxLevelToParent taxLevelToChild
+             capitalize };
 
 my $dbh = undef;
 sub getDbHandle() {
@@ -549,9 +550,26 @@ sub getTaxa {
 
 my @levelsOrdered = qw{domain phylum class order family genus species};
 my %levelToParent = map { $levelsOrdered[$_] => $levelsOrdered[$_-1] } (1..6);
+my %levelToChild = map { $levelToParent{$_} => $_ } (keys %levelToParent);
 
-# Given a row from the Taxon table and the taxa hash (from gettaxa),
-# returns a hash of level => taxon for this taxon and all its parents
+sub taxLevels() { return @levelsOrdered };
+
+sub taxLevelToParent($) {
+  my ($level) = @_;
+  return undef if $level eq "domain";
+  die "Unknown level $level" unless exists $levelToParent{$level};
+  return $levelToParent{$level};
+}
+
+sub taxLevelToChild($) {
+  my ($level) = @_;
+  return undef if $level eq "species";
+  die "Unknown level $level" unless exists $levelToChild{$level};
+  return $levelToChild{$level};
+}
+
+# Given a row from the Taxon table and the taxa hash (from getTaxa),
+# returns a reference to hash of level => taxon for this taxon and all its parents
 sub taxToParts($$) {
   my ($tax, $taxa) = @_;
   my %out = ();
@@ -568,6 +586,12 @@ sub taxToParts($$) {
     }
   }
   return \%out;
+}
+
+sub capitalize($) {
+  my ($string) = @_;
+  return $string if !defined $string || $string eq "";
+  return uc(substr($string, 0, 1)) . lc(substr($string, 1));
 }
 
 1;
