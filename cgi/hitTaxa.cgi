@@ -178,6 +178,12 @@ $maxRows = 200 if $all eq "freq";
 foreach my $row (@rows) {
   my @out = split /;;;/, $row->{taxString};
   $out[0] = domainHtml($out[0]);
+  for (my $i = 1; $i < scalar(@levelsShow); $i++) {
+    my $levelThis = lc($levelsShow[$i]);
+    $out[$i] = a({ -style => "text-decoration: none;",
+                   -href => "taxon.cgi?level=$levelThis&taxon=".uri_escape($out[$i]) },
+                 encode_entities($out[$i]));
+  }
   my $showNHits = commify($row->{nHits});
   if ($row->{nHits} > 0) {
     my @tHits;
@@ -195,12 +201,16 @@ foreach my $row (@rows) {
                    -style => "text-decoration: none;",
                    -title => "see$truncateString $goodString hits in " . encode_entities($out[-1]) },
                    $showNHits);
+  } else {
+    $showNHits = "&nbsp;";
   }
   my $bgColor = $iRow % 2 == 0 ? "lightgrey" : "white";
   print Tr({-style => "background-color: $bgColor;"},
            td(\@out),
            td({-style => "text-align: right;"},
-              [ commify($row->{nGenomes}), commify($row->{nHitGenomes}), $showNHits ])) . "\n";
+              [ commify($row->{nGenomes}),
+                $row->{nHitGenomes} > 0 ? commify($row->{nHitGenomes}) : "&nbsp;",
+                $showNHits ])) . "\n";
   $iRow++;
   last if defined $maxRows && $iRow >= $maxRows;
 }

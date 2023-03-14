@@ -88,7 +88,8 @@ if (@$children > 0) {
     $iRow++;
     my $nG = $child->{nGenomes};
     print Tr({-bgcolor => $iRow % 2 == 0 ? "white" : "lightgrey"},
-             td(a({ -href => "taxon.cgi?level=" . $child->{level} . "&taxon=" . uri_escape($child->{taxon}) },
+             td(a({ -style => 'text-decoration: none;',
+                    -href => "taxon.cgi?level=" . $child->{level} . "&taxon=" . uri_escape($child->{taxon}) },
                   $child->{taxon})),
              td({ -align => "right" }, $nG )), "\n";
   }
