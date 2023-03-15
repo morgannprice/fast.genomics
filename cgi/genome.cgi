@@ -86,4 +86,35 @@ print p("Scaffolds:", commify($nScaffolds),
            -style => "text-decoration: none;"},
           commify($genome->{nProteins})));
 
+print
+  h3("Tools"),
+  start_form(-name => 'search', -method => 'GET', -action => 'genomeSearch.cgi'),
+  qq{<INPUT type="hidden" name="gid" value="$gid" />},
+  p("Search annotations:", br(),
+    qq{<INPUT type="text" name="query" size=40 maxLength=1000 />},
+    submit('Go')),
+  end_form,
+  start_form(-name => 'curated', -method => 'GET', -action => "https://papers.genomics.lbl.gov/cgi-bin/genomeSearch.cgi"),
+  qq{<INPUT type="hidden" name="gdb" value="NCBI" />},
+  qq{<INPUT type="hidden" name="gid" value="$gid" />},
+  p(a({-href => "https://papers.genomics.lbl.gov/cgi-bin/genomeSearch.cgi",
+       -title => "Find characterized proteins whose descriptions match the query, and then search the genome for homologs of those proteins",
+       -style => "text-decoration: none;"},
+      "Curated BLAST:"),
+    br(),
+    qq{<INPUT type="text" name="query" size=40 maxLength=1000 />},
+    checkbox(-name => 'word', -label => 'Match whole words only?', -checked => 0),
+    submit('Go'),
+    br(),
+    span({-style => "font-size: 80%;"}, "Examples: perchlorate or 1.2.1.88")),
+  end_form,
+  p(a({-href => "https://papers.genomics.lbl.gov/cgi-bin/gapView.cgi",
+       -title => "Automated annotation of metabolic pathways",
+       -style => "text-decoration: none;"},
+      "GapMind")
+    ,"for",
+    a({-href => "https://papers.genomics.lbl.gov/cgi-bin/gapView.cgi?gdb=NCBI&gid=$gid&set=aa"}, "amino acid biosynthesis"),
+    "or",
+    a({-href => "https://papers.genomics.lbl.gov/cgi-bin/gapView.cgi?gdb=NCBI&gid=$gid&set=carbon"}, "carbon catabolism"));
+
 finish_page();
