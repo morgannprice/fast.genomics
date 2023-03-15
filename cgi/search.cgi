@@ -173,7 +173,11 @@ if (defined $query{genes}) {
   if (scalar(keys %gid) == 1) {
     my $genome = gidToGenome($gid) || die $gid;
     die $gid unless $genome;
-    print p("Found", scalar(@$genes), " matches in $genome->{gtdbSpecies} $genome->{strain} ($genome->{gid})");
+    print p("Found", scalar(@$genes), "matches in",
+            a({-href => "genome.cgi?gid=".$genome->{gid}, -style => "text-decoration:none;" },
+              i($genome->{gtdbSpecies}), $genome->{strain}),
+            a({-href => "https://www.ncbi.nlm.nih.gov/assembly/".$genome->{gid}, -style => "text-decoration:none;"},
+              "($genome->{gid})"));
     foreach my $gene (@$genes) {
       my $locusTag = $gene->{locusTag};
       print p(a({href => "gene.cgi?locus=$locusTag"}, $locusTag),
