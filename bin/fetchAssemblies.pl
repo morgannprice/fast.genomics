@@ -2,11 +2,12 @@
 use strict;
 use Getopt::Long;
 use FindBin qw{$RealBin};
+use IO::Handle;
 use lib "$RealBin/../lib";
 use neighbor qw{featuresToGenes};
 use lib "$RealBin/../../PaperBLAST/lib";
 use FetchAssembly qw{CacheAssembly ParseNCBIFeatureFile};
-use pbutils qw{ReadTable};
+use pbutils qw{ReadTable setNCBIKey};
 
 my $usage = <<END
 fetchAssemblies.pl -table genomes.tsv -dir dir
@@ -22,16 +23,28 @@ has. Assemblies that cannot be fetched (for instance, that do not have
 protein annotations) are omitted from the fetched table.
 
 Optional arguments:
+-keyFile NCBI.api_key
 -outTable genomes.tsv.fetched
 END
 ;
 
-my ($tableFile, $outTable, $dir);
+my ($tableFile, $outTable, $dir, $keyFile);
 die $usage
-  unless GetOptions('table=s' => \$tableFile, 'dir=s' => \$dir, '-outTable' => \$outTable)
+  unless GetOptions('table=s' => \$tableFile, 'dir=s' => \$dir, 'outTable=s' => \$outTable,
+                   'keyFile=s' => \$keyFile)
   && @ARGV == 0
   && defined $tableFile && defined $dir;
 die "Not a directory: $dir\n" unless -d $dir;
+if (defined $keyFile) {
+  open(my $fh, "<", $keyFile) || die "Cannot open $keyFile\n";
+  my $key = <$fh>;
+  close($fh) || die "Error reading $keyFile";
+  chomp $key;
+  if ($key ne "") {
+    setNCBIKey($key);
+    print STDERR "Read NCBI key from $keyFile\n";
+  }
+}
 $outTable = "$tableFile.fetched" if !defined $outTable;
 
 my @rows = ReadTable($tableFile, ["fetch"]);
@@ -46,12 +59,35 @@ foreach my $row (@rows) {
 
 open(my $fhOut, ">", $outTable) || die "Cannot write to $outTable";
 print $fhOut join("\t", qw{fetch gid nGenes nProteinGenes})."\n";
+$fhOut->autoflush(1);
 
 FetchAssembly::setFailMode("warning");
 my $nFetched = 0;
 foreach my $row (@rows) {
   my $fetch = $row->{fetch};
-  my $assembly = CacheAssembly("NCBI", $fetch, $dir);
+  my $assembly;
+  my $iTry = 0;
+  for(;;) {
+    my $reTry = 0;
+    eval {
+      $assembly = CacheAssembly("NCBI", $fetch, $dir);
+    } or do {
+      my $error = $@;
+      print STDERR join("\t", "Error", $fetch, $error)."\n";
+      print STDERR "Sleeping for 15, maybe NCBI is down\n";
+      sleep(15);
+      $reTry = 1;
+    };
+    if ($reTry) {
+      $iTry++;
+      if ($iTry >= 10) {
+        print STDERR join("\t", "Error", $fetch, "too many retries!")."\n";
+        last;
+      }
+    } else {
+      last;
+    }
+  }
   if (defined $assembly) {
     my $gid = $assembly->{gid} || die;
     my $featureFile = "$dir/refseq_${gid}.features.tab";
