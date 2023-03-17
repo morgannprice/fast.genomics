@@ -71,6 +71,7 @@ foreach my $row (@rows) {
     my $reTry = 0;
     eval {
       $assembly = CacheAssembly("NCBI", $fetch, $dir);
+      1;
     } or do {
       my $error = $@;
       print STDERR join("\t", "Error", $fetch, $error)."\n";
