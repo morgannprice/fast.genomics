@@ -7,7 +7,7 @@ use IO::Handle; # for autoflush
 use DBI;
 use HTML::Entities;
 use URI::Escape;
-use List::Util qw{min max};
+use List::Util qw{min max sum};
 use lib "../lib";
 use neighbor;
 use genesSvg;
@@ -15,15 +15,20 @@ use genesSvg;
 use lib "../../PaperBLAST/lib";
 use neighborWeb;
 use pbweb qw{commify};
+use MOTree; # from PaperBLAST/lib/
 
-# CGI arguments:
-# locus (a locus tag in the database) or seqDesc and seq
+# Required CGI arguments:
+# locus (a locus tag in the database)
+# or seqDesc and seq
+#
+# Optional arguments:
 # n -- max number of hits to show
 # kb -- how many kilobases to show
 # hitType -- top, random, or randomAny; top means show top hits and is the default;
 #	random means select that many random good hits; randomAny means random N hits
 # format -- empty (default -- shows an svg) or fasta (proteins sequences of homologs shown)
 #     or tsv (tab-delimited table of all genes shown)
+# tree -- set to build a tree (if needed) and render it
 my $cgi = CGI->new;
 my ($gene, $seqDesc, $seq) = getGeneSeqDesc($cgi);
 my $n = $cgi->param('n');
@@ -35,6 +40,7 @@ $kbShown = min(40, max(2, $kbShown));
 my $ntShown = $kbShown * 1000;
 my $kbWidth = int(0.5 + 150 / ($kbShown/6));
 my $hitType = $cgi->param('hitType') || 'top';
+my $showTree = $cgi->param('tree') || 0;
 
 if (defined $gene && ! $seq) {
   # should not be reachable, but redirect to gene page just in case
@@ -55,7 +61,7 @@ unless (hasMMSeqsHits($seq)) {
 }
 
 my $format = $cgi->param('format') || "";
-$format = "" unless $format eq "fasta" || $format eq "tsv";
+$format = "" unless $format eq "fasta" || $format eq "tsv" || $format eq "newick";
 $format = "" unless hasMMSeqsHits($seq);
 
 if ($format eq "") {
@@ -88,8 +94,9 @@ if ($format eq "") {
     print "Content-Type:text\n";
   } elsif ($format eq "tsv") {
     print "Content-Type:text/tab-separated-values\n";
-  } else {
-    die;
+  } elsif ($format eq "newick") {
+    $showTree = 1;
+    print "Content-Type:text\n";
   }
   print "Content-Disposition: attachment; filename=$fileName\n\n";
 }
@@ -154,6 +161,7 @@ if ($format eq "") {
 
   # Show options form
   my $randomOption = "";
+  my $treeChecked = $showTree ? "CHECKED" : "";
   print
     start_form( -name => 'input', -method => 'GET', -action => 'neighbors.cgi' ),
       geneSeqDescSeqHidden($gene, $seqDesc, $seq),
@@ -167,6 +175,8 @@ if ($format eq "") {
         "&nbsp;",
         'Kilobases:', popup_menu(-name => 'kb', -values => [6, 9, 12, 18, 25, 40], -default => $kbShown),
         "&nbsp;",
+        qq{<INPUT name='tree' TYPE='checkbox' $treeChecked><label for='tree'>Show tree?</label>},
+        "&nbsp;",
         submit('Change')),
     end_form;
 
@@ -178,14 +188,16 @@ if ($format eq "") {
   }
   push @links, a({-href => "hitTaxa.cgi?$options"},
                  "taxonomic distribution"). " of its homologs";
-  my $download = small("Downloads:",
-                       a({ -href => "neighbors.cgi?${options}&n=${n}&hitType=${hitType}&format=fasta",
-                           -title => "homologs shown (fasta format)"}, "protein sequences"),
-                       "or",
-                       a({ -href => "neighbors.cgi?${options}&n=${n}&hitType=${hitType}&kb=${kbShown}&format=tsv",
-                           -title => "all genes shown (tab-delimited)"}, "table of genes"));
-
-  print p("Or see", join(" or ", @links).".", $download), "\n";
+  my @downloads = ();
+  push @downloads, a({ -href => "neighbors.cgi?${options}&n=${n}&hitType=${hitType}&format=fasta",
+                       -title => "homologs shown (fasta format)"}, "protein sequences");
+  push @downloads, a({ -href => "neighbors.cgi?${options}&n=${n}&hitType=${hitType}&kb=${kbShown}&format=tsv",
+                       -title => "all genes shown (tab-delimited)"}, "table of genes");
+  push @downloads, a({ -href => "neighbors.cgi?${options}&n=${n}&hitType=${hitType}&kb=${kbShown}&tree=1&format=newick",
+                       -title => "tree (newick format, rooted)"}, "phylogenetic tree")
+    if $showTree;
+  print p("Or see", join(" or ", @links).".",
+          small("Downloads:", join(", ", @downloads))), "\n";
 }
 
 if ($format eq "fasta") {
@@ -305,6 +317,63 @@ if ($format eq "tsv") {
   exit(0);
 }
 
+my $tree = undef;
+my $genesLeft = 0;
+my @nodesSorted;
+my %leafToHit;
+
+if ($showTree) {
+  $tree = geneHitsToTree($geneHits);
+  $tree->rerootMidpoint();
+  if ($format eq "newick") {
+    print $tree->toNewick();
+    print "\n";
+    exit(0);
+  }
+  $genesLeft = 175;
+
+  # Add node to each gene hit
+  my %locusTagToGene = map { $_->{locusTag} => $_ } @$geneHits;
+  foreach my $node ($tree->get_leaf_nodes) {
+    my $id = $tree->id($node);
+    die "Unknown id $id" unless exists $locusTagToGene{$id};
+    $locusTagToGene{$id}{node} = $node;
+    $leafToHit{$node} = $locusTagToGene{ $tree->id($node) };
+  }
+
+  # Order the tree so that the highest-scoring hits are at the top
+  # First, compute the max bits for each internal node
+  my %nodeToMaxBits = ();
+  foreach my $hit (@$geneHits) {
+    $nodeToMaxBits{ $hit->{node} } = $hit->{bits};
+  }
+  # Reverse of depth first traversal is bottom-up
+  my $dfs = $tree->depthfirst();
+  foreach my $node (reverse @$dfs) {
+    if (!exists $nodeToMaxBits{$node}) {
+      my @children = $tree->children($node);
+      die unless @children > 0;
+      my @values = ();
+      foreach my $child (@children) {
+        die $child unless exists $nodeToMaxBits{$child};
+        push @values, $nodeToMaxBits{$child};
+      }
+      $nodeToMaxBits{$node} = max(@values);
+    }
+  }
+  # Depth first traversal, sorted by max bits
+  $dfs = $tree->depthfirst(\%nodeToMaxBits);
+  @nodesSorted = reverse @$dfs;
+  my @leavesSorted = grep $tree->is_Leaf($_), @nodesSorted;
+  my @hitsSorted = ();
+  print start_ul();
+  foreach my $leaf (@leavesSorted) {
+    push @hitsSorted, $leafToHit{$leaf};
+  }
+  # Reassign sorting of hits
+  $geneHits = \@hitsSorted;
+}
+
 die unless $format eq "";
 
 foreach my $hit (@$geneHits) {
@@ -326,11 +395,13 @@ foreach my $hit (@$geneHits) {
     my $taxonURL = encode_entities("taxon.cgi?level=$level&taxon=".uri_escape($taxon));
     push @lineage, qq[<a xlink:href=$taxonURL><tspan font-size="75%">$taxon</tspan></a>];
   }
+  my $xDomain = $genesLeft + 150;
+  my $xLineage = $genesLeft + 165;
   push @svgLines,
-    qq[<text x="0" y="$yAt" font-size="90%"><title>$hitDetails</title>${identity}% id, $hit->{bits} bits</text>],
-    qq[<text x="150" y="$yAt" font-family="bold" font-size="90%" fill=$domainColor>],
+    qq[<text x="$genesLeft" y="$yAt" font-size="90%"><title>$hitDetails</title>${identity}% id, $hit->{bits} bits</text>],
+    qq[<text x="$xDomain" y="$yAt" font-family="bold" font-size="90%" fill=$domainColor>],
     qq[<title>$hitGenome->{gtdbDomain}</title>$domainChar</text>],
-    qq[<text x="165" y="$yAt">],
+    qq[<text x="$xLineage" y="$yAt">],
     @lineage,
     qq[<a xlink:href="$genomeURL">],
     qq[<tspan font-style="italic" font-size="90%">],
@@ -338,6 +409,7 @@ foreach my $hit (@$geneHits) {
     encode_entities($hitGenome->{gtdbSpecies}),
     qq[</tspan></a></text>];
   $yAt += 6;
+  $hit->{yTrack} = $yAt + 9; # remember gene location for the future. This is the middle of the track
   my $mid = ($hit->{begin} + $hit->{end})/2;
   my $showBegin = $mid - $ntShown/2;
   my $showEnd = $mid + $ntShown/2;
@@ -358,6 +430,7 @@ foreach my $hit (@$geneHits) {
   my %genesSvg = genesSvg($hit->{showGenes},
                           'begin' => $showBegin, 'end' => $showEnd,
                           'kbWidth' => $kbWidth,
+                          'xLeft' => $genesLeft,
                           'yTop' => $yAt,
                           # labels only for the top row
                           'showLabel' => $hit->{locusTag} eq $geneHits->[0]{locusTag},
@@ -366,10 +439,73 @@ foreach my $hit (@$geneHits) {
   $yAt = max($yAt, $genesSvg{yMax}) + 2;
   $xMax = max($xMax, $genesSvg{xMax});
 }
-my %scaleBarSvg = scaleBarSvg('xLeft' => $xMax * 0.7,
+my %scaleBarSvg = scaleBarSvg('xLeft' => $genesLeft + ($xMax - $genesLeft) * 0.7,
                               'yTop' => $yAt + 5);
 my $svgWidth = max($xMax, $scaleBarSvg{xMax});
 my $svgHeight = $scaleBarSvg{yMax};
+
+# Now that the gene tracks are laid out, we have a position for each gene, so
+# lay out the tree
+if ($tree) {
+  my %nodeY;
+  # Leaves are at yTrack (top of the gene diagram)
+  foreach my $hit (@$geneHits) {
+    my $node = $hit->{node};
+    $nodeY{ $hit->{node} } = $hit->{yTrack};
+  }
+  # For internal nodes, y is average of childrens' y
+  my $dfs = $tree->depthfirst;
+  foreach my $node (reverse @$dfs) {
+    if (!exists $nodeY{$node}) {
+      my @children = $tree->children($node);
+      die unless @children > 0;
+      my @values = ();
+      foreach my $child (@children) {
+        die unless defined $nodeY{$child};
+        push @values, $nodeY{$child};
+      }
+      $nodeY{$node} = sum(@values) / scalar(@values);
+    }
+  }
+
+  my %nodeX; # proportionate to distance from root
+  my $treeLeft = 1;
+  my $treeRight = $genesLeft - 5;
+  my $nodeDepth = $tree->nodeDepth();   # Distance from root to every node
+  my $maxDepth = max(values %$nodeDepth);
+  $maxDepth = 0.001 if $maxDepth < 0.001;
+  while (my ($node, $depth) = each %$nodeDepth) {
+    $nodeX{$node} = $treeLeft + ($treeRight - $treeLeft) * $depth/$maxDepth;
+  }
+
+  my %nodeTitle = ();
+  my %nodeURL = ();
+  my %nodeColor = (); # defaults to black
+  my %nodeRadius = ();
+  foreach my $node (@$dfs) {
+    if ($tree->is_Leaf($node)) {
+      my $hit = $leafToHit{$node} || die;
+      my $hitGenome = gidToGenome($hit->{gid}) || die;
+      $nodeTitle{$node} = encode_entities($hit->{locusTag} . " from " . $hitGenome->{gtdbSpecies});
+      $nodeURL{$node} = "gene.cgi?locus=" . $hit->{locusTag};
+      $nodeRadius{$node} = 4;
+    } else {
+      my $id = $tree->id($node);
+      if (defined $id && $id ne "") {
+        $nodeRadius{$node} = 4;
+        $nodeTitle{$node} = sprintf("Support: %.2f", $tree->id($node));
+        $nodeColor{$node} = "lightgrey" if $id < 0.8;
+      }
+    }
+  }
+  push @svgLines, $tree->drawSvg('nodeX' => \%nodeX,
+                                 'nodeY' => \%nodeY,
+                                 'nodeURL' => \%nodeURL,
+                                 'nodeTitle' => \%nodeTitle,
+                                 'nodeColor' => \%nodeColor,
+                                 'nodeRadius' => \%nodeRadius);
+  push @svgLines, $tree->drawSvgScaleBar('nodeX' => \%nodeX, 'y' => 10);
+}
 
 print join("\n",
            qq[<SVG width="$svgWidth" height="$svgHeight" style="position: relative; left: 1em;">],
