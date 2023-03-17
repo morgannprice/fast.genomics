@@ -14,7 +14,7 @@ use HTML::Entities;
 use pbweb qw{GetMotd commify
              VIMSSToFasta RefSeqToFasta UniProtToFasta FBrowseToFasta pdbToFasta
              runTimerHTML runWhileCommenting};
-use pbutils qw{NewerThan};
+use pbutils qw{NewerThan ReadFastaEntry};
 use neighbor;
 use clusterProteins;
 
@@ -30,7 +30,8 @@ our (@ISA,@EXPORT);
              clusterGenes
              domainHtml
              getTaxa taxLevels taxToParts taxLevelToParent taxLevelToChild
-             capitalize };
+             capitalize
+             geneHitsToProteinAlignment geneHitsToTree};
 
 my $dbh = undef;
 sub getDbHandle() {
@@ -474,8 +475,8 @@ sub clusterGenes {
   my $n = scalar(@proteinIds);
   my $clusterFile = "../tmp/hits/${n}_${md5}.cluster";
   my @proteinClusters;
-  # RECLUSTER environment variable is for testing
-  if (-e $clusterFile && ! $ENV{RECLUSTER}) {
+  # RECOMPUTE environment variable is for testing
+  if (-e $clusterFile && ! $ENV{RECOMPUTE}) {
     open (my $fh, "<", $clusterFile) || die "Cannot read $clusterFile";
     while (my $line = <$fh>) {
       chomp $line;
@@ -593,6 +594,118 @@ sub capitalize($) {
   my ($string) = @_;
   return $string if !defined $string || $string eq "";
   return uc(substr($string, 0, 1)) . lc(substr($string, 1));
+}
+
+# Returns a hash of protSpec to gene, where each prot spec is proteinId___sBegin___sEnd
+sub geneHitsToProtSpec {
+  my ($genes) = @_;
+  my %protSpecToGenes;
+  foreach my $gene (@$genes) {
+    die "Not protein-coding: " . $gene->{locusTag}
+      unless $gene->{proteinId} ne "";
+    die "Empty alignment range for " . $gene->{locusTag}
+      unless $gene->{sEnd} > $gene->{sBegin};
+    my $protSpec = join("___", $gene->{proteinId}, $gene->{sBegin}, $gene->{sEnd});
+    push @{ $protSpecToGenes{$protSpec} }, $gene;
+  }
+  return %protSpecToGenes;
+}
+
+# Given a list of gene hits, which contain locusTag, proteinId, sBegin, and sEnd,
+# adds an alignedSeq entry to each gene hit.
+# No return value.
+sub geneHitsToProteinAlignment {
+  my ($genes) = @_;
+  my %protSpecToGenes = geneHitsToProtSpec($genes);
+  my @protSpec = sort keys %protSpecToGenes;
+  my $md5 = md5_hex(join(",", @protSpec));
+  my $n = scalar(@protSpec);
+  my $alnFile = "../tmp/hits/${md5}_${n}.aln";
+  # RECOMPUTE environment variable is for testing
+  if (-e $alnFile && ! $ENV{RECOMPUTE}) {
+    # reuse the alignment
+  } else {
+    my $muscle = "../bin/muscle3";
+    die "No such executable: $muscle\n" unless -x $muscle;
+    my $tmpFile = "$alnFile.$$.tmp";
+    my $faaFile = "/tmp/neighborWeb.$$.faa";
+    open(my $fhFaa, ">", $faaFile) || die "Cannot write to $faaFile";
+    foreach my $protSpec (@protSpec) {
+      my ($proteinId, $sBegin, $sEnd) = split /___/, $protSpec;
+      die unless $proteinId ne "";
+      my ($seq) = getDbHandle()->selectrow_array("SELECT sequence FROM Protein WHERE proteinId = ?",
+                                                 {}, $proteinId);
+      die "No sequence for $proteinId" unless defined $seq;
+      die "Invalid begin:end $sBegin : $sEnd for $proteinId"
+        unless $sBegin >=1 && $sEnd <= length($seq);
+      my $subseq = substr($seq, $sBegin-1, $sEnd-$sBegin+1);
+      print $fhFaa ">$protSpec\n$subseq\n";
+    }
+    close($fhFaa) || die "Error writing to $faaFile\n";
+    my $muscleOptions = "-maxiters 2 -maxmb 1000";
+    print CGI::p(CGI::small("Running muscle")), "\n";
+    my $cmd = "$muscle -quiet $muscleOptions < $faaFile > $tmpFile";
+    system($cmd) == 0 || die "$cmd\nfailed: $!";
+    rename($tmpFile, $alnFile) || die "Cannot rename to $tmpFile to $alnFile";
+    unlink($faaFile);
+  }
+
+  # read the alignment
+  open(my $fh, "<", $alnFile) || die "Cannot read $alnFile";
+  my $state = {};
+  while (my ($protSpec, $seq) = ReadFastaEntry($fh, $state)) {
+    die "Unexpected alignment id: $protSpec" unless exists $protSpecToGenes{$protSpec};
+    foreach my $gene (@{ $protSpecToGenes{$protSpec} }) {
+      $gene->{alignedSeq} = $seq;
+    }
+  }
+  close($fh) || die "Error reading $alnFile";
+  foreach my $gene (@$genes) {
+    die "No aligned sequence for " . $gene->{locusTag}
+      unless $gene->{alignedSeq};
+  }
+  return 1;
+}
+
+# Given gene hits, infer a tree. The returned tree has locus tags as the node identifiers,
+# so each locus tag must be present just once.
+sub geneHitsToTree {
+  my ($genes) = @_;
+  my %protSpecToGenes = geneHitsToProtSpec($genes);
+  my @protSpec = sort keys %protSpecToGenes;
+  my $md5 = md5_hex(join(",", @protSpec));
+  my $n = scalar(@protSpec);
+  my $treeFile = "../tmp/hits/${md5}_${n}.tree";
+  # RECOMPUTE environment variable is for testing
+  if (-e $treeFile && ! $ENV{RECOMPUTE}) {
+    # reuse the tree
+  } else {
+    # ensure that each gene shows up just once
+    my %seen = ();
+    foreach my $gene (@$genes) {
+      die "Duplicate locus tag: " . $gene->{locusTag} . "\n"
+        if exists $seen{ $gene->{locusTag} };
+      $seen{ $gene->{locusTag} } = 1;
+      die "Invalid locus tag " . $gene->{locusTag}
+        unless $gene->{locusTag} =~ m/^[0-9A-Za-z_.-]+$/;
+    }
+    my $fastTree = "../bin/FastTree";
+    die "No such executable: $fastTree\n" unless -x $fastTree;
+    geneHitsToProteinAlignment($genes);
+    my $alnFile = "/tmp/neighborWeb.$$.aln";
+    open(my $fhAln, ">", $alnFile) || die "Cannot write to $alnFile\n";
+    foreach my $gene (@$genes) {
+      print $fhAln ">" . $gene->{locusTag} . "\n" . $gene->{alignedSeq} . "\n";
+    }
+    close($fhAln) || die "Error writing to $alnFile\n";
+    my $tmpFile = "$treeFile.tmp";
+    my $cmd = "$fastTree -quiet < $alnFile > $tmpFile";
+    print CGI::p(CGI::small("Running FastTree"));
+    system($cmd) == 0 || die "$cmd\nfailed: $!\n";
+    rename($tmpFile, $treeFile) || die "Cannot rename to $tmpFile to $treeFile";
+    unlink($alnFile);
+  }
+  return MOTree::new( file => $treeFile );
 }
 
 1;
