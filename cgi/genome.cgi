@@ -113,8 +113,12 @@ print
        -style => "text-decoration: none;"},
       "GapMind")
     ,"for",
-    a({-href => "https://papers.genomics.lbl.gov/cgi-bin/gapView.cgi?gdb=NCBI&gid=$gid&set=aa"}, "amino acid biosynthesis"),
+    a({-href => "https://papers.genomics.lbl.gov/cgi-bin/gapView.cgi?gdb=NCBI&gid=$gid&set=aa"},
+      "amino acid biosynthesis"),
     "or",
-    a({-href => "https://papers.genomics.lbl.gov/cgi-bin/gapView.cgi?gdb=NCBI&gid=$gid&set=carbon"}, "carbon catabolism"));
+    a({-href => "https://papers.genomics.lbl.gov/cgi-bin/gapView.cgi?gdb=NCBI&gid=$gid&set=carbon"},
+      "carbon catabolism"),
+    span({-style => "font-size: 80%;"}, "(takes 10-40 seconds)")
+   );
 
 finish_page();
