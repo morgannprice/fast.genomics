@@ -7,9 +7,12 @@ sqlite3 must be installed
 
 bin/ cgi/ lib/ should match the code repository
 
-The bin/mmseqs (for mmseqs2), bin/lastal, bin/lastdb, and bin/bl2seq
-(BLAST align two sequences) executables must exist. I downloaded the
-code for LAST from https://gitlab.com/mcfrith/last
+The bin directory must include these executables:
+mmseqs (for mmseqs2), we use version 7b95387f93e38c3911f9188bc702d63ed3194013
+lastal and lastdb (for LAST), we use version 1422
+  code at https://gitlab.com/mcfrith/last
+muscle3
+bl2seq (BLAST align two sequences)
 
 The tmp/cache/ and tmp/hits/ subdirectories
 should exist and be writable by the web server.
