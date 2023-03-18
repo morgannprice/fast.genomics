@@ -486,7 +486,8 @@ if ($tree) {
     if ($tree->is_Leaf($node)) {
       my $hit = $leafToHit{$node} || die;
       my $hitGenome = gidToGenome($hit->{gid}) || die;
-      $nodeTitle{$node} = encode_entities($hit->{locusTag} . " from " . $hitGenome->{gtdbSpecies});
+      $nodeTitle{$node} = encode_entities(join(" ", $hit->{locusTag}, "from",
+                                               $hitGenome->{gtdbSpecies}, $hitGenome->{strain}));
       $nodeURL{$node} = "gene.cgi?locus=" . $hit->{locusTag};
       $nodeRadius{$node} = 4;
     } else {

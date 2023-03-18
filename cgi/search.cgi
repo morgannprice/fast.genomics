@@ -101,7 +101,7 @@ The protein of interest need not be in fast.genomics' database.
 <P>Once the homologs are identified, fast.genomics can quickly show:
 
 <UL>
-<LI><A HREF="neighbors.cgi?locus=ING2E5A_RS06865">Gene neighborhoods</A>
+<LI><A HREF="neighbors.cgi?locus=ING2E5A_RS06865&tree=1">Gene neighborhoods</A>
 <LI><A HREF="hitTaxa.cgi?locus=ING2E5A_RS06865">Which taxa contain homologs</A>
 <LI>Compare the <A HREF="compare.cgi?locus=ING2E5A_RS06865&query2=ING2E5A_RS06860">presence/absence</A> of two proteins
 <UL>
