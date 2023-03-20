@@ -366,7 +366,6 @@ if ($showTree) {
   @nodesSorted = reverse @$dfs;
   my @leavesSorted = grep $tree->is_Leaf($_), @nodesSorted;
   my @hitsSorted = ();
-  print start_ul();
   foreach my $leaf (@leavesSorted) {
     push @hitsSorted, $leafToHit{$leaf};
   }
@@ -518,5 +517,17 @@ print join("\n",
            $scaleBarSvg{svg},
            "</g>",
            "</svg>") . "\n";
+
+if ($tree) {
+  print p({-style => "font-size: 90%;"},
+          "The alignment was computed with",
+          a({-href => "https://drive5.com/muscle/downloads_v3.htm"}, "MUSCLE 3"),
+          "and fast settings (-maxiters 2 -maxmb 1000). Only the",
+          "part of each sequence that is similar to the query was used.",
+          "The phylogenetic tree was computed with",
+          a({-href => "http://www.microbesonline.org/fasttree/"}, "FastTree 2"),
+          "using default settings",
+          "and was then rooted at the midpoint.");
+}
 
 finish_page();
