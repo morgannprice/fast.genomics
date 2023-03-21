@@ -47,17 +47,17 @@ if (exists $hit->{error}) {
   my $uniprotURL = "https://www.uniprot.org/uniprot/" . $uniprotId;
   my $interproURL = "https://www.ebi.ac.uk/interpro/protein/UniProt/" . $uniprotId;
   my $identityShow = int($hit->{identity} * 100 + 0.5);
-  print p("${identityShow}% identical to",
-          $hit->{prefix} eq "sp" ? "Swiss-Prot" : "UniProt",
-          a({-href => $uniprotURL}, $uniprotId),
-          $hit->{geneName},
-          "(".a({-href => $interproURL}, "InterPro").")",
-          "over",
-          $hit->{qBegin}.":".$hit->{qEnd}."/".length($query{seq}),
-          "of query",
-          br(),
-          "Description:",
-          encode_entities($hit->{desc}), "(" . i(encode_entities($hit->{species})) . ")");
+  print
+    p("${identityShow}% identical to",
+      $hit->{prefix} eq "sp" ? "Swiss-Prot" : "UniProt",
+      a({-href => $uniprotURL}, $uniprotId),
+      $hit->{geneName},
+      "(".a({-href => $interproURL}, "InterPro").")",
+      "over",
+      $hit->{qBegin}.":".$hit->{qEnd}."/".length($query{seq}),
+      "of query"),
+   p("Description:",
+     encode_entities($hit->{desc}), "(" . i(encode_entities($hit->{species})) . ")");
 } else {
   # no hits
   print p("Sorry, no close match to this sequence was found in UniProt");
