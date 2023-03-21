@@ -375,6 +375,7 @@ sub proteinAnalysisLinks($$$) {
   return pbweb::analysisLinks('desc' => $header,
                               'seq' => $seq,
                               'skip' => {'fast.genomics' => 1},
+                              'psortType' => $psortType,
                               'fbLoad' => 1);
 }
 
