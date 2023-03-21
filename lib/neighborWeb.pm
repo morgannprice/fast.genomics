@@ -367,56 +367,15 @@ sub getNearbyGenes($) {
 # If $genome is undef, just uses gram negative models for psortb
 sub proteinAnalysisLinks($$$) {
   my ($header, $seq, $genome) = @_;
-  $header = encode_entities($header);
-
-  my ($psortType, $psortShow) = ("negative", "Gram-negative bacteria");
+  my $psortType = "negative";
   if (defined $genome) {
-    ($psortType, $psortShow) = ("positive", "Gram-positive bacteria")
-      if $genome->{gtdbPhylum} =~ m/^Firmicutes|Actinobacteriota/;
-    ($psortType, $psortShow) = ("archaea", "archaea")
-      if $genome->{gtdbDomain} eq "Archaea";
+    $psortType = "archaea" if $genome->{gtdbDomain} eq "Archaea";
+    $psortType = "positive" if $genome->{gtdbPhylum} =~ m/^Firmicutes|Actinobacteriota/;
   }
-
-  my $newline = "%0A";
-  my $fitnessBlastJs = <<END
-<SCRIPT src="https://fit.genomics.lbl.gov/d3js/d3.min.js"></SCRIPT>
-<SCRIPT src="https://fit.genomics.lbl.gov/images/fitblast.js"></SCRIPT>
-<SCRIPT>
-var server_root = "https://fit.genomics.lbl.gov/";
-var seq = "$seq";
-fitblast_load_short("fitblast_short", server_root, seq);
-</SCRIPT>
-END
-    ;
-  return
-    ( CGI::a({-href => "http://papers.genomics.lbl.gov/cgi-bin/litSearch.cgi?query=>${header}$newline$seq"},
-             "PaperBLAST") .
-      " (search for papers about homologs of this protein)",
-      qq[<A TITLE="Fitness BLAST compares your sequence to bacterial proteins that have mutant phenotypes"
-            NAME="#fitness">Fitness BLAST:</A>
-         <SPAN ID="fitblast_short"><SMALL>loading...</SMALL></SPAN>]
-      . $fitnessBlastJs,
-      CGI::a({-href => "http://www.ncbi.nlm.nih.gov/Structure/cdd/wrpsb.cgi?seqinput=>${header}$newline$seq"},
-             "Search the Conserved Domains Database"),
-      CGI::a({ -href => "http://www.ebi.ac.uk/thornton-srv/databases/cgi-bin/pdbsum/FindSequence.pl?pasted=$seq",
-               -title => "Find similar proteins with known structures (PDBsum)"},
-             "Search protein structures"),
-      "Predict protein localization: " .
-      CGI::a({-href => "https://papers.genomics.lbl.gov/cgi-bin/psortb.cgi?name=${header}&type=${psortType}&seq=${seq}",
-              -title => "PSORTb v3.0 for $psortShow"},
-        "PSORTb") . " ($psortShow)",
-      "Predict transmembrane helices: "
-      . CGI::a({-href => "https://fit.genomics.lbl.gov/cgi-bin/myPhobius.cgi?name=${header}&seq=${seq}"},
-               "Phobius"),
-      "Find the "
-      . CGI::a({ -href => "https://fast.genomics.lbl.gov/cgi/bestHitUniprot.cgi?query=>${header}$newline$seq",
-            -title => "See UniProt's annotation, the predicted structure, and protein families from InterPro"},
-          "best match")
-      . " in UniProt",
-      "Find homologs in the " .
-      CGI::a({-href => "https://iseq.lbl.gov/genomes/seqsearch?sequence=>${header}$newline$seq"},
-             "ENIGMA genome browser")
-    );
+  return pbweb::analysisLinks('desc' => $header,
+                              'seq' => $seq,
+                              'skip' => {'fast.genomics' => 1},
+                              'fbLoad' => 1);
 }
 
 # Given a CGI object, which may specify locus or seq and seqDesc,
