@@ -6,7 +6,8 @@ use strict;
 our (@ISA,@EXPORT);
 @ISA = qw(Exporter);
 @EXPORT = qw{cluster parseClustering expandByClusters clusteringIntoDb
-             proteinsToFaa formatBLASTp runBLASTp proteinDbSize};
+             proteinsToFaa formatBLASTp runBLASTp proteinDbSize
+             parseBLASTpHits saveBLASTpHits};
 
 # Writes the reduced fasta to out and the clustering to out.clstr
 # Saves the cd-hit log in out.log
@@ -128,8 +129,15 @@ sub runBLASTp {
   system($blastCmd) == 0 || die "blastall failed:\n$blastCmd\n$!";
   unlink($tmpFaa);
 
+  my $hits = parseBLASTpHits($tmpHits);
+  unlink($tmpHits);
+  return($hits);
+}
+
+sub parseBLASTpHits($) {
+  my ($file) = @_;
   my @out = ();
-  open(my $fhHits, "<", $tmpHits) || die "Cannot read $tmpHits";
+  open(my $fhHits, "<", $file) || die "Cannot read $file";
   while (my $line = <$fhHits>) {
     chomp $line;
     my (undef, $subject, $identity, $alen, $mm, $gap, $qBegin, $qEnd, $sBegin, $sEnd, $eValue, $bits)
@@ -142,9 +150,22 @@ sub runBLASTp {
                  'sBegin' => $sBegin, 'sEnd' => $sEnd,
                  'eValue' => $eValue, 'bits' => $bits };
   }
-  close($fhHits) || die "Error reading $tmpHits";
-  unlink($tmpHits);
-  return(\@out);
+  close($fhHits) || die "Error reading $file";
+  return \@out;
+}
+
+sub saveBLASTpHits($$) {
+  my ($hits, $file) = @_;
+  open(my $fh, ">", $file) || die "Cannot write to $file";
+  foreach my $row (@$hits) {
+    print $fh join("\t", "query", $row->{subject},
+                   $row->{identity} * 100,
+                   map $row->{$_}, qw{alnLength nMismatch nGapOpens
+                                      qBegin qEnd
+                                      sBegin sEnd
+                                      eValue bits})."\n";
+  }
+  close($fh) || die "Error writing to $file";
 }
 
 # Given a reference to a list of clusterIds, and a handle to a database with the ClusterProtein table,
