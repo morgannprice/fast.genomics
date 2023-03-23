@@ -114,6 +114,7 @@ sub runBLASTp {
   die "No such file: $db.pin" unless -e "$db.pin";
   my $minEValue = $param{eValue} || 1e-3;
   my $nCPUs = $param{nCPUs} || 8;
+  my $dbSize = $param{dbSize} || 0;
 
   my $tmpPre = ($ENV{TMPDIR} || "/tmp") . "/clusterBLASTp.$$";
   my $tmpFaa = "$tmpPre.faa";
@@ -122,7 +123,7 @@ sub runBLASTp {
   close($fhFaa) || die "Error writing to $tmpFaa";
 
   my $tmpHits = "$tmpPre.hits";
-  my $blastCmd = qq{$blastall -p blastp -e $minEValue -a $nCPUs -i $tmpFaa -d $db -F "m S" -m 8}
+  my $blastCmd = qq{$blastall -p blastp -e $minEValue -z $dbSize -a $nCPUs -i $tmpFaa -d $db -F "m S" -m 8}
     . " -b 10000 -v 10000 -o $tmpHits >& /dev/null";
   system($blastCmd) == 0 || die "blastall failed:\n$blastCmd\n$!";
   unlink($tmpFaa);
