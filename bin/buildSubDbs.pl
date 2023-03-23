@@ -2,16 +2,16 @@
 use strict;
 use Getopt::Long;
 use FindBin qw{$RealBin};
-use IO::Handle; # for autoflush
 use lib "$RealBin/../lib";
 use neighbor qw{parseTaxString featuresToGenes orderToSubName};
 use lib "$RealBin/../../PaperBLAST/lib";
 use FetchAssembly qw{ParseNCBIFeatureFile};
 use pbutils qw{ReadFastaEntry ReadTable};
+use clusterBLASTp;
 my $nCPUs = $ENV{MC_CORES} || (`egrep -c '^processor' /proc/cpuinfo`);
 
-my $minCoverage = 0.8;
-my $minIdentity = 0.8;
+my $minCoverage = 0.9;
+my $minIdentity = 0.7;
 my $nSlices = 4;
 
 my $usage = <<END
@@ -115,58 +115,28 @@ foreach my $order (sort keys %orderToGenomes) {
   unlink($tmpGenomes);
   unlink($tmpFetched);
 
-  # Run cd-hit
-  my $proteinFaa = "$orderDir/neighbor.faa";
-  die unless -e $proteinFaa;
-  my $clusterPre = "$orderDir/cluster.faa";
-  # cluster at 80% identity, no memory limit, use 5-mers
-  # -d 0 means use sequence name in fasta header up to first white space
-  # -aS and -aL set the coverage of the sequence and the cluster representative
-  print STDERR "Clustering $order\n";
-  my $clusterCmd = "$cdhit -i $proteinFaa -o $clusterPre -c $minIdentity -M 0 -T $nCPUs -n 5 -d 0"
-    . " -aS $minCoverage -aL $minCoverage >& $clusterPre.log";
-  system($clusterCmd) == 0 || die "cd-hit failed:\n$clusterCmd\n$!\n";
 
-  # Parse the .clstr file
-  my @clusters = ();
-  open (my $fhClust, "<", "$clusterPre.clstr")
-    || die "Cannot read $clusterPre.clstr";
-  while (my $line = <$fhClust>) {
-    if ($line =~ m/^>/) {
-      push @clusters, []; # start an emtpy cluster
-    } else {
-      $line =~ m/>(\S+)[.][.][.] / || die "Cannot parse cluster line\n$line\n";
-      my $proteinId = $1;
-      die "Cluster member before cluster number\n" if @clusters == 0;
-      push @{ $clusters[-1] }, $proteinId;
-    }
-  }
-  close($fhClust) || die "Error reading $clusterPre.clstr";
-  my $clusterTab = "$orderDir/neighbor_ClusterProtein.tab";
-  open (my $fhCT, ">", $clusterTab)
-    || die "Cannot write to $clusterTab\n";
-  foreach my $cluster (@clusters) {
-    $iCluster++;
-    foreach my $proteinId (@$cluster) {
-      print $fhCT join("\t", $iCluster, $proteinId)."\n";
-    }
-  }
-  close($fhCT) || die "Error writing to $clusterTab\n";
+  die unless -e "$orderDir/neighbor.faa";
+  my $proteinFaa = "$orderDir/sub.faa";
+  rename("$orderDir/neighbor.faa", $proteinFaa) || die "Rename to $proteinFaa failed";
+  my $clusterPre = "$orderDir/cluster.faa";
+  print STDERR "Clustering $order\n";
+  my $clusters = cluster('cdhit' => $cdhit, 'faa' => $proteinFaa, 'out' => $clusterPre,
+                         'minIdentity' => $minIdentity, 'minCoverage' => $minCoverage,
+                         'nCPUs' => $nCPUs);
 
   my $cInfoTab = "$orderDir/neighbor_ClusteringInfo.tab";
   open(my $fhCI, ">", $cInfoTab) || die "Cannot write to $cInfoTab\n";
   my $nProteins = 0;
-  foreach my $cluster (@clusters) {
+  foreach my $cluster (values %$clusters) {
     $nProteins += scalar(@$cluster);
   }
-  my $nClusters = scalar(@clusters);
-  print $fhCI "$nProteins\t$nClusters\n";
+  my $nClusters = scalar(keys %$clusters);
+  my $nClusteredAA = proteinDbSize($clusterPre);
+  print $fhCI join("\t", $nProteins, $nClusters, $nClusteredAA)."\n";
   close($fhCI) || die "Error writing to $cInfoTab\n";
-
   unlink("$clusterPre.clstr");
-
-  my $formatCmd = "$formatdb -p T -i $clusterPre";
-  system($formatCmd) == 0 || die "formatdb failed:\n$formatCmd\n$!";
+  formatBLASTp($formatdb, $clusterPre);
 
   # Build the sql database
   print STDERR "Building the sqlite3 database $orderDir/sub.db\n";
@@ -174,15 +144,16 @@ foreach my $order (sort keys %orderToGenomes) {
   unlink($dbFile);
   my $sqlFile = "$RealBin/../lib/neighbor.sql";
   system("sqlite3 $dbFile < $sqlFile") == 0 || die $!;
-  open(SQLITE, "|-", "sqlite3", "$dbFile") || die "Cannot run sqlite3 on $dbFile";
-  autoflush SQLITE 1;
-  print SQLITE ".mode tabs\n";
-  foreach my $table (qw{Genome Gene Protein ClusterProtein ClusteringInfo Taxon}) {
-    print SQLITE ".import $orderDir/neighbor_${table}.tab $table\n";
+  open(my $fhSql, "|-", "sqlite3", "$dbFile") || die "Cannot run sqlite3 on $dbFile";
+  print $fhSql ".mode tabs\n";
+  foreach my $table (qw{Genome Gene Protein ClusteringInfo Taxon}) {
+    print $fhSql ".import $orderDir/neighbor_${table}.tab $table\n";
   }
   # Remove higher level taxa from Taxon
-  print SQLITE qq{DELETE FROM Taxon WHERE level NOT IN ("order","family","genus","species");\n};
-  close(SQLITE) || die "Error loading database: $!";
+  print $fhSql qq{DELETE FROM Taxon WHERE level NOT IN ("order","family","genus","species");\n};
+  close($fhSql) || die "Error loading database: $!";
+  # Add the clusters ot the database
+  clusteringIntoDb($clusters, $dbFile);
   foreach my $table (qw{Genome Gene Protein ClusterProtein ClusteringInfo Taxon}) {
     unlink("$orderDir/neighbor_${table}.tab");
   }
