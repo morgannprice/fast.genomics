@@ -5,7 +5,8 @@ use strict;
 
 our (@ISA,@EXPORT);
 @ISA = qw(Exporter);
-@EXPORT = qw(parseTaxString readMMSeqsHits estimateTopScore cumsum featuresToGenes);
+@EXPORT = qw(parseTaxString readMMSeqsHits estimateTopScore cumsum featuresToGenes orderToSubName
+             csvQuote);
 
 # Returns a hash of d/p/c/o/f/g/s to value
 # (any of which could be missing),
@@ -145,3 +146,22 @@ sub featuresToGenes($) {
   }
   return (\@genes, \@warnings);
 }
+
+# Given the name of an order, return a similar string suitable for use as the directory name
+# (As of Marc 2023, none of the orders in GTDB need changing.)
+sub orderToSubName($) {
+  my ($order) = @_;
+  $order =~ s/[^A-Za-z0-9_.-]/../g;
+  return($order);
+}
+
+# sqlite3 expects CVS format, not exactly tab delimited format
+# So, need to replace any " with "" and surround the field with quotes.
+sub csvQuote($) {
+  my ($in) = @_;
+  return $in unless $in =~ m/"/;
+  $in =~ s/"/""/g;
+  return '"' . $in . '"';
+}
+
+1;

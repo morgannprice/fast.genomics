@@ -2,9 +2,9 @@
 use strict;
 use Getopt::Long;
 use FindBin qw{$RealBin};
-use IO::Handle;                 # for autoflush
+use IO::Handle; # for autoflush
 use lib "$RealBin/../lib";
-use neighbor qw{parseTaxString featuresToGenes};
+use neighbor qw{parseTaxString featuresToGenes csvQuote};
 use lib "$RealBin/../../PaperBLAST/lib";
 use FetchAssembly qw{ParseNCBIFeatureFile};
 use pbutils qw{ReadFastaEntry ReadTable};
@@ -25,28 +25,28 @@ files.
 
 More arguments (optional):
 -test -- test mode: build tab-delimited tables and faa file, but
-   do not delete them or build the mmseqs or sqlite3 databases.
+   do not build the mmseqs indexes or the sqlite3 database,
+   or delete the tab-delimited tables, or compress the faa file
 -slices $nSlices -- how many slices to use for the mmseqs db
+-quiet
 END
 ;
 
-# sqlite3 expects CVS format, not exactly tab delimited format
-# So, need to replace any " with "" and surround the field with quotes.
-sub csv_quote($);
-
-my ($genomeFile, $fetchedFile, $inDir, $outDir, $test);
+my ($genomeFile, $fetchedFile, $inDir, $outDir, $test, $quiet);
 die $usage
   unless GetOptions('genomes=s' => \$genomeFile,
                     'fetched=s' => \$fetchedFile,
                     'in=s' => \$inDir,
                     'out=s' => \$outDir,
                     'test' => \$test,
-                    'slices=i' => \$nSlices)
+                    'slices=i' => \$nSlices,
+                    'quiet' => \$quiet)
   && defined $genomeFile
   && defined $inDir
   && defined $outDir
   && @ARGV == 0;
 $fetchedFile = "$genomeFile.fetched" if !defined $fetchedFile;
+$quiet = 1 if defined $quiet;
 
 die "No such directory: $inDir\n" unless -d $inDir;
 die "No such directory: $outDir\n" unless -d $outDir;
@@ -54,11 +54,12 @@ die "nSlices is out of range\n" unless $nSlices >= 1 && $nSlices <= 100;
 
 my @genomes = ReadTable($genomeFile,
   qw[fetch accession ncbi_assembly_name gtdb_taxonomy ncbi_taxonomy ncbi_strain_identifiers]);
-print STDERR "Read " . scalar(@genomes) . " genomes\n";
-my @assemblyRows = ReadTable($fetchedFile, qw[fetch gid]);
-my %fetchToGid = map { $_->{fetch} => $_->{gid} } @assemblyRows;
+print STDERR "Read " . scalar(@genomes) . " genomes\n" unless $quiet;
+my @fetched = ReadTable($fetchedFile, qw[fetch gid]);
+my %fetchToGid = map { $_->{fetch} => $_->{gid} } @fetched;
 @genomes = grep exists $fetchToGid{$_->{fetch}}, @genomes;
-print STDERR "Genomes with fetched assemblies: " . scalar(@genomes) . "\n";
+print STDERR "Genomes with fetched assemblies: " . scalar(@genomes) . "\n"
+  unless $quiet;
 
 die "No genomes to load\n" if @genomes == 0;
 
@@ -68,9 +69,9 @@ if (!defined $test) {
   unlink($dbFile);
   my $sqlFile = "$RealBin/../lib/neighbor.sql";
   system("sqlite3 $dbFile < $sqlFile") == 0 || die $!;
-  print STDERR "Created empty database $dbFile\n";
+  print STDERR "Created empty database $dbFile\n" unless $quiet;
 }
-print STDERR "Reading genomes\n";
+print STDERR "Reading genomes\n" unless $quiet;
 
 # As we read the genomes, write to the tables
 my @tables = qw{Genome Gene Protein Taxon};
@@ -136,7 +137,7 @@ foreach my $row (@genomes) {
     print { $fh{Gene} } join("\t", $gid,
                              $gene->{scaffoldId}, $gene->{start}, $gene->{end}, $gene->{strand},
                              $locusTag, $proteinId,
-                             csv_quote($gene->{desc})) . "\n";
+                             csvQuote($gene->{desc})) . "\n";
     $nGenesWithProteins++ if $proteinId ne "";
   }
   print STDERR "Warning\t$gid\t$nGenes genes but only $nGenesWithProteins with protein sequences !\n"
@@ -167,15 +168,15 @@ foreach my $row (@genomes) {
     }
   }
   print { $fh{Genome} } join("\t", $gid, @taxa,
-                             csv_quote($row->{ncbi_strain_identifiers}), $row->{accession},
+                             csvQuote($row->{ncbi_strain_identifiers}), $row->{accession},
                              $row->{ncbi_assembly_name}, $row->{ncbi_taxonomy},
                             $nGenes, $nGenesWithProteins)."\n";
 }
 
 foreach my $level (@levels) {
   foreach my $taxon (sort keys %{ $nGenomes{$level} }) {
-    print { $fh{Taxon} } join("\t", csv_quote($taxon), $level,
-                              csv_quote($taxParent{$level}{$taxon} || ""),
+    print { $fh{Taxon} } join("\t", csvQuote($taxon), $level,
+                              csvQuote ($taxParent{$level}{$taxon} || ""),
                               $nGenomes{$level}{$taxon})."\n";
   }
 }
@@ -185,9 +186,9 @@ foreach my $table (@tables) {
   close($fh{$table}) || die "Error writing to $files{$table}";
 }
 
-print STDERR "Read all genomes and built neighbor.faa and tables for loading\n";
+print STDERR "Read all genomes and built neighbor.faa and tables for loading\n" unless $quiet;
 if (defined $test) {
-  print STDERR "Finished with test mode\n";
+  print STDERR "Finished with test mode\n" unless $quiet;
   exit(0);
 }
 
@@ -195,7 +196,7 @@ open(SQLITE, "|-", "sqlite3", "$dbFile") || die "Cannot run sqlite3 on $dbFile";
 autoflush SQLITE 1;
 print SQLITE ".mode tabs\n";
 foreach my $table (@tables) {
-  print STDERR "Loading table $table\n";
+  print STDERR "Loading table $table\n" unless $quiet;
   print SQLITE ".import $files{$table} $table\n";
 }
 print SQLITE <<END
@@ -209,11 +210,11 @@ END
 ;
 close(SQLITE) || die "Error running sqlite3 import commands\n";
 
-print STDERR "Creating and indexing the sliced mmseqs database\n";
+print STDERR "Creating and indexing the sliced mmseqs database\n" unless $quiet;
 my $cmd = "$RealBin/buildSliced.pl -in $faaOut -slices $nSlices -out $slicedDb";
 system($cmd) == 0
   || die "Error running buildSliced.pl: $!\nCommand: $cmd\n";
-print STDERR "Finished building:\nsqlite3 $dbFile\nsliceddb $slicedDb\n";
+print STDERR "Finished building:\nsqlite3 $dbFile\nsliceddb $slicedDb\n" unless $quiet;
 
 # Remove tab-delimited imports
 foreach my $file (values %files) {
@@ -222,9 +223,3 @@ foreach my $file (values %files) {
 
 system("gzip --force $faaOut") == 0 || die "gzip failed";
 
-sub csv_quote($) {
-  my ($in) = @_;
-  return $in unless $in =~ m/"/;
-  $in =~ s/"/""/g;
-  return '"' . $in . '"';
-}

@@ -1,3 +1,11 @@
+/* This is the schema for both the top-level database,
+   which stores the representative genomes for each genus,
+   and for each "subdb", usually one per order.
+
+   A few fields or tables are used only in the top-level database
+   or only in the subdbs.
+*/
+
 CREATE TABLE Genome (
   gid TEXT PRIMARY KEY, /* assemblyId in the downloaded tables */
   gtdbDomain TEXT NOT NULL,
@@ -44,6 +52,21 @@ CREATE TABLE Protein (
   sequence TEXT NOT NULL
 );
 
+/* Cluster is not used in the top-level database */
+CREATE TABLE ClusterProtein (
+  clusterId INT NOT NULL,
+  proteinId TEXT NOT NULL,
+  PRIMARY KEY (clusterId,proteinId)
+);
+CREATE INDEX 'ProteinToCluster' ON ClusterProtein (proteinId,clusterId);
+
+/* ClusteringInfo is not in the top-level database */
+CREATE TABLE ClusteringInfo (
+  nProteins INT NOT NULL PRIMARY KEY,
+  nClusters INT NOT NULL
+);
+
+/* In the subdbs, only taxa up to the order level are represented */
 CREATE TABLE Taxon (
   taxon TEXT NOT NULL,
   level TEXT NOT NULL,
