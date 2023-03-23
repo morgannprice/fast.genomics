@@ -54,7 +54,7 @@ CREATE TABLE Protein (
 
 /* Cluster is not used in the top-level database */
 CREATE TABLE ClusterProtein (
-  clusterId INT NOT NULL,
+  clusterId TEXT NOT NULL, /* the proteinId of the representative */
   proteinId TEXT NOT NULL,
   PRIMARY KEY (clusterId,proteinId)
 );
@@ -62,8 +62,9 @@ CREATE INDEX 'ProteinToCluster' ON ClusterProtein (proteinId,clusterId);
 
 /* ClusteringInfo is not in the top-level database */
 CREATE TABLE ClusteringInfo (
-  nProteins INT NOT NULL PRIMARY KEY,
-  nClusters INT NOT NULL
+  nProteins INT NOT NULL,
+  nClusters INT NOT NULL,
+  nClusteredAA INT NOT NULL
 );
 
 /* In the subdbs, only taxa up to the order level are represented */
