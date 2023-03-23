@@ -17,10 +17,12 @@ use pbweb qw{GetMotd commify
 use pbutils qw{NewerThan ReadFastaEntry};
 use neighbor;
 use clusterProteins;
+use clusterBLASTp;
 
 our (@ISA,@EXPORT);
 @ISA = qw(Exporter);
-@EXPORT = qw{getDbHandle parseGeneQuery hasMMSeqsHits getMMSeqsHits
+@EXPORT = qw{getDbHandle getSubDbHandle
+             parseGeneQuery hasMMSeqsHits getMMSeqsHits
              parseGeneQuery
              getGeneSeqDesc geneSeqDescSeqOptions geneSeqDescSeqHidden
              hitsToGenes hitsToTopGenes hitsToRandomGenes
@@ -31,15 +33,31 @@ our (@ISA,@EXPORT);
              domainHtml
              getTaxa taxLevels taxToParts taxLevelToParent taxLevelToChild
              capitalize
-             geneHitsToProteinAlignment geneHitsToTree};
+             geneHitsToProteinAlignment geneHitsToTree
+             getSubDbHomologs};
 
-my $dbh = undef;
+my $memDbh = undef;
 sub getDbHandle() {
-  if (!defined $dbh) {
+  if (!defined $memDbh) {
     my $sqldb = "../data/neighbor.db";
-    $dbh = DBI->connect("dbi:SQLite:dbname=$sqldb","","",{ RaiseError => 1 }) || die $DBI::errstr;
+    $memDbh = DBI->connect("dbi:SQLite:dbname=$sqldb","","",{ RaiseError => 1 }) || die $DBI::errstr;
   }
-  return $dbh;
+  return $memDbh;
+}
+
+my $memSubDbh = undef;
+my $memSubDb = undef;
+sub getSubDbHandle($) {
+  my ($subDb) = @_;
+  die "Invalid subdb: $subDb\n" unless $subDb =~ m/^[a-zA-Z0-9_.-]+$/;
+  if (defined $memSubDbh) {
+    die "New subDb $subDb vs. $memSubDb" unless $memSubDb eq $subDb;
+  } else {
+    my $sqldb = "../data/$subDb/sub.db";
+    $memSubDbh = DBI->connect("dbi:SQLite:dbname=$sqldb","","",{ RaiseError => 1 }) || die $DBI::errstr;
+    $memSubDb = $subDb;
+  }
+  return $memSubDbh;
 }
 
 sub getHitsFile($) {
@@ -389,8 +407,9 @@ sub getGeneSeqDesc($) {
   my $locus = $cgi->param('locus');
   if (defined $locus && $locus ne "") {
     my $gene = locusTagToGene($locus) || die "Unknown locus tag in locus parameter";
-    my ($seq) = $dbh->selectrow_array("SELECT sequence FROM Protein WHERE proteinId = ?",
-                                      { Slice => {} }, $gene->{proteinId})
+    my ($seq) = getDbHandle()->selectrow_array(
+        "SELECT sequence FROM Protein WHERE proteinId = ?",
+        { Slice => {} }, $gene->{proteinId})
       if $gene->{proteinId} ne "";
     return ($gene, $gene->{locusTag} . " " . $gene->{desc}, $seq);
   }
@@ -452,8 +471,8 @@ sub clusterGenes {
     my %proteinSeq = ();
     print qq{<P id="ClusterInfo">Clustering the proteins for coloring...</P>}, "\n";
     foreach my $proteinId (keys %proteinToGenes) {
-      my ($seq) = $dbh->selectrow_array("SELECT sequence FROM Protein WHERE proteinId = ?",
-                                        {}, $proteinId);
+      my ($seq) = getDbHandle()->selectrow_array("SELECT sequence FROM Protein WHERE proteinId = ?",
+                                                 {}, $proteinId);
       die "Unknown proteinId $proteinId" unless $seq;
       $proteinSeq{$proteinId} = $seq;
     }
@@ -668,4 +687,62 @@ sub geneHitsToTree {
   return MOTree::new( file => $treeFile );
 }
 
+sub computeSubDbHomologs($$) {
+  my ($subDb, $seq) = @_;
+  die "Invalid sequence" unless $seq =~ m/^[A-Z]+$/;
+  my $subDir = "../data/$subDb";
+  my $clusterDb = "$subDir/cluster.faa";
+  die "No such file: $clusterDb.pin" unless -e "$clusterDb.pin";
+
+  my $blastall = "../bin/blast/blastall";
+  die "No such executable: $blastall" unless -x $blastall;
+  my $formatdb = "../bin/blast/formatdb";
+  die "No such executable: $formatdb" unless -x $formatdb;
+
+  my $tmpPre = "/tmp/neighborWeb.$$";
+  print CGI::p("Running BLASTp");
+  my $hits1 = runBLASTp('blastall' => $blastall, 'query' => $seq, 'db' => $clusterDb,
+                        'eValue' => 1e-3, 'nCPUs' => 10);
+  return [] if @$hits1 == 0;
+
+  print CGI::p("Found", scalar(@$hits1), " clustered hits"), "\n";
+  print CGI::p("Processing the hits and re-running BLASTp"), "\n";
+  my %clusterIds = map { $_->{subject} => 1 } @$hits1;
+  my @clusterIds = sort keys %clusterIds;
+  my $subDbh = getSubDbHandle($subDb);
+  my $proteinIds = expandByClusters(\@clusterIds, $subDbh);
+  print CGI::p("Expanded to", scalar(@$proteinIds), "proteins"),"\n";
+  proteinsToFaa($proteinIds, "$tmpPre.faa", $subDbh);
+  formatBLASTp($formatdb, "$tmpPre.faa");
+  my ($dbSize) = $subDbh->selectrow_array("SELECT nClusteredAA FROM ClusteringInfo");
+  my $hits = runBLASTp('blastall' => $blastall, 'query' => $seq, 'db' => "$tmpPre.faa",
+                       'eValue' => 1e-3, 'nCPUs' => 2, 'dbSize' => $dbSize);
+  unlink("$tmpPre.faa");
+  foreach my $suffix (qw{phr pin psq}) {
+    unlink("$tmpPre.faa.$suffix");
+  }
+  print CGI::p("Returning",scalar(@$hits),"hits"),"\n";
+  return $hits;
+}
+
+# Given a subdb and a sequence, compute the homologs. Returns a reference to a list of hashes,
+# each containg subject, eValue, etc.
+sub getSubDbHomologs($$) {
+  my ($subDb, $seq) = @_;
+  $seq = uc($seq);
+  my $subDir = "../data/$subDb";
+  my $clusterDb = "$subDir/cluster.faa";
+  die "No such file: $clusterDb.pin" unless -e "$clusterDb.pin";
+  my $md5 = md5_hex($seq);
+  my $md5 = md5_hex($seq);
+  my $hitsFile = "../tmp/hits/${subDb}_$md5.hits";
+
+  if (NewerThan($hitsFile, $clusterDb.".pin")) {
+    return parseBLASTpHits($hitsFile);
+  } else {
+    my $hits = computeSubDbHomologs($subDb, $seq);
+    saveBLASTpHits($hits, $hitsFile);
+    return $hits;
+  }
+}
 1;
