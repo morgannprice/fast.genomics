@@ -1,6 +1,7 @@
-/* This is the schema for both the top-level database,
-   which stores the representative genomes for each genus,
-   and for each "subdb", usually one per order.
+/* This is the schema for both the top-level database, which stores
+   the representative genomes for each genus, and for each "subdb",
+   which has many more genomes, but is restricted to a taxon (usually
+   one subdb per order).
 
    A few fields or tables are used only in the top-level database
    or only in the subdbs.
@@ -60,7 +61,7 @@ CREATE TABLE ClusterProtein (
 );
 CREATE INDEX 'ProteinToCluster' ON ClusterProtein (proteinId,clusterId);
 
-/* ClusteringInfo is not in the top-level database */
+/* ClusteringInfo is not used in the top-level database */
 CREATE TABLE ClusteringInfo (
   nProteins INT NOT NULL,
   nClusters INT NOT NULL,
@@ -77,3 +78,13 @@ CREATE TABLE Taxon (
 );
 CREATE INDEX TaxonLevel ON Taxon (level, taxon);
 CREATE INDEX TaxonParent ON Taxon (parent);
+
+/* SubDbs are listed only in the top-level database */
+CREATE TABLE SubDb (
+  taxon TEXT NOT NULL PRIMARY KEY,
+  level TEXT NOT NULL,
+  prefix TEXT NOT NULL,
+  nGenomes INT NOT NULL,
+  nProteins INT NOT NULL,
+  nClusters INT NOT NULL
+);

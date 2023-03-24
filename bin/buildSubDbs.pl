@@ -18,7 +18,7 @@ my $usage = <<END
 ./buildSubDbs.pl -genomes genomes.tsv [ -fetched genomes.tsv.fetched ] -in indir -out outdir
 
 Creates the sub databases for each order, in subdirectories of the
-output directory.
+output directory. Also writes to outdir/SubDbs.tsv
 
 The genomes table must include the fields fetch, (gtdb) accession,
 ncbi_assembly_name, gtdb_taxonomy, ncbi_taxonomy, and
@@ -85,7 +85,10 @@ foreach my $genome (@genomes) {
 
 print STDERR "Found " . scalar(keys %orderToGenomes) . " orders\n";
 
-my $iCluster = 0; # global cluster number
+my $tabFile = "$outDir/SubDbs.tsv";
+open(my $fhTab, ">", $tabFile) || die "Cannot write to $tabFile";
+print $fhTab join("\t", qw{taxon level prefix nGenomes nProteins nClusters})."\n";
+
 foreach my $order (sort keys %orderToGenomes) {
   my $orderGenomes = $orderToGenomes{$order};
   next if @$orderGenomes < 2;
@@ -141,7 +144,7 @@ foreach my $order (sort keys %orderToGenomes) {
   # Build the sql database
   print STDERR "Building the sqlite3 database $orderDir/sub.db\n";
   my $dbFile = "$orderDir/sub.db";
-  unlink($dbFile);
+  unlink($dbFile); # no old data
   my $sqlFile = "$RealBin/../lib/neighbor.sql";
   system("sqlite3 $dbFile < $sqlFile") == 0 || die $!;
   open(my $fhSql, "|-", "sqlite3", "$dbFile") || die "Cannot run sqlite3 on $dbFile";
@@ -159,7 +162,17 @@ foreach my $order (sort keys %orderToGenomes) {
   }
   system("gzip --force $clusterPre") == 0 || die "gzip failed on $clusterPre";
   system("gzip --force $proteinFaa") == 0 || die "gzip failed on $proteinFaa";
+  print $fhTab join("\t", $order, "order", orderToSubName($order),
+                    scalar(@$orderGenomes), $nProteins, $nClusters)."\n";
 }
+close($fhTab) || die "Error writing to $tabFile";
+print STDERR "Wrote $tabFile\n";
+print STDERR <<END
+To load it into neighbor.db use
+.mode tabs
+DELETE * from SubDb;
+.import $tabFile SubDb
+END
+  ;
 print STDERR "buildSubDbs.pl done\n";
-
 
