@@ -87,7 +87,6 @@ print STDERR "Found " . scalar(keys %orderToGenomes) . " orders\n";
 
 my $tabFile = "$outDir/SubDbs.tsv";
 open(my $fhTab, ">", $tabFile) || die "Cannot write to $tabFile";
-print $fhTab join("\t", qw{taxon level prefix nGenomes nProteins nClusters})."\n";
 
 foreach my $order (sort keys %orderToGenomes) {
   my $orderGenomes = $orderToGenomes{$order};
