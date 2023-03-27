@@ -169,7 +169,7 @@ print STDERR "Wrote $tabFile\n";
 print STDERR <<END
 To load it into neighbor.db use
 .mode tabs
-DELETE * from SubDb;
+DELETE FROM SubDb;
 .import $tabFile SubDb
 END
   ;
