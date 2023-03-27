@@ -116,7 +116,7 @@ sub featuresToGenes($) {
     }
     push @warnings, "More than one gene entry for locus_tag $locus_tag"
       if @geneFeatures > 1;
-    print STDERR "Warning: more than one non-gene entry for locus_tag $locus_tag"
+    print STDERR "Warning: more than one non-gene entry for locus_tag $locus_tag\n"
       if @others > 1;
     my $feature = $geneFeatures[0];
     my $other = $others[0]; # or undef
