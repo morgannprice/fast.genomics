@@ -38,13 +38,25 @@ start_page('title' => $title);
 autoflush STDOUT 1; # show preliminary results
 
 if ($constGenome) {
+  my @lineage = ();
+  foreach my $level (qw{phylum class order family}) {
+    my $tax = $constGenome->{"gtdb" . capitalize($level)};
+    my $URL = "taxon.cgi?level=$level&taxon=$tax";
+    if (getOrder() ne "" && ($level eq "phylum" || $level eq "class")) {
+      push @lineage, a({-href => $URL,
+                        -title => "See $level $tax in the main database",
+                        -style => "text-decoration: none; color: black;" },
+                       $tax);
+    } else {
+      push @lineage, a({-href => addOrderToURL($URL),
+                        -title => $level,
+                        -style => "text-decoration: none;"},
+                       $tax);
+    }
+  }
   print p("Lineage:",
           domainHtml($constGenome),
-          map(a({-href => addOrderToURL("taxon.cgi?level=".lc($_)."&taxon="
-                                        . uri_escape($constGenome->{"gtdb$_"})),
-                 -title => lc($_),
-                 -style => "text-decoration: none;"}, $constGenome->{"gtdb$_"}),
-                qw{Phylum Class Order Family}),
+          @lineage,
           a({-href => addOrderToURL("genome.cgi?gid=$constGenome->{gid}"),
              -style => "text-decoration:none;"},
             i($constGenome->{gtdbSpecies})),
