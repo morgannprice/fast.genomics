@@ -71,12 +71,12 @@ if ($level eq "species" || $taxObj->{nGenomes} == 1) {
     my $genome = $genomes->[0];
     print h3("Genome"),
       p(a({-href => addOrderToURL("genome.cgi?gid=" . $genome->{gid})},
-        encode_entities($genome->{gtdbSpecies} . " " . $genome->{strain})));
+          i(encode_entities($genome->{gtdbSpecies})), encode_entities($genome->{strain})));
   } else {
     print h3("Genomes"), start_ul();
     foreach my $genome (@$genomes) {
       print li(a({-href => addOrderToURL("genome.cgi?gid=" . $genome->{gid})},
-                 encode_entities($genome->{gtdbSpecies} . " " . $genome->{strain})));
+                 i(encode_entities($genome->{gtdbSpecies})), encode_entities($genome->{strain})));
     }
     print end_ul;
   }

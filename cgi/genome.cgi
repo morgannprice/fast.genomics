@@ -76,13 +76,14 @@ foreach my $level (qw[Domain Phylum Class Order Family Genus Species]) {
   push @lineage, a({ -title => $title, -style => $style, -href => $href },
                    encode_entities($genome->{"gtdb" . $level}));
 }
-print p("GTDB taxonomy:", @lineage);
+print p("GTDB taxonomy:", join(", ", @lineage));
 
 my @ncbi = map { s/^[a-z]__//; $_ } split /;/, $genome->{ncbiTaxonomy};
 @ncbi = grep $_ ne "", @ncbi;
 print p("NCBI taxonomy:",
         join(", ",
              map a({-href => "https://www.ncbi.nlm.nih.gov/taxonomy/?term=" . uri_escape($_),
+                    -title => "See taxon at NCBI",
                     -style => "text-decoration: none;"},
                    encode_entities($_)), @ncbi));
 
