@@ -25,7 +25,7 @@ our (@ISA,@EXPORT);
 @EXPORT = qw{setOrder getOrder getSubDb addOrderToURL orderToHidden
              getDbHandle getTopDbHandle getSubDbHandle
              hasHits getHits
-             hitsToGenes hitsToTopGenes hitsToRandomGenes
+             hitsToGenes hitsToTopGenes hitsToTopGenesClustered hitsToRandomGenes
              parseGeneQuery
              getGeneSeqDesc geneSeqDescSeqOptions geneSeqDescSeqHidden
              start_page finish_page
@@ -345,7 +345,7 @@ sub gidToGenome($) {
                                           {}, $gid);
 }
 
-# Convert hits to proteinIds (from readMMSeqsHits) to a list of genes.
+# Convert hits to proteinIds (from getHits) to a list of genes.
 # Both input and output are a list of references; the output rows
 # have all of the fields from the Gene table as well.
 sub hitsToGenes($) {
@@ -376,6 +376,51 @@ sub hitsToTopGenes($$) {
   my $hitGenes = hitsToGenes(\@top);
   splice $hitGenes, $n if scalar(@$hitGenes) > $n;
   return $hitGenes;
+}
+
+# Like hitsToTopGenes(), but only 1 hit per cluster x species,
+# and each returned row includes clusterId, species, nGenomes, and genes
+sub hitsToTopGenesClustered($$$) {
+  my ($hits, $n, $preferredLocusTag) = @_;
+  die "Cannot use clustering in top db" unless getOrder() ne "";
+  my @hitGenes = ();
+  my %clusteredGenes = (); # cluster => species => list of locus tags
+  my %clusteredGid = (); # cluster => species => gid => 1
+  foreach my $hit (@$hits) {
+    foreach my $hg (@{ hitsToGenes([ $hit ]) }) {
+      my ($clusterId) = getDbHandle()->selectrow_array(
+        "SELECT clusterId FROM ClusterProtein WHERE proteinId = ?", {}, $hg->{proteinId});
+      die "No cluster for " . $hg->{proteinId}
+        unless defined $clusterId && $clusterId ne "";
+      my ($species) = getDbHandle()->selectrow_array(
+        "SELECT gtdbSpecies FROM Genome WHERE gid = ?", {}, $hg->{gid});
+      die "No species for $hg->{gid}" unless $species;
+      $hg->{clusterId} = $clusterId;
+      $hg->{species} = $species;
+      if (exists $clusteredGenes{$clusterId}{$species}) {
+        if (defined $preferredLocusTag && $hg->{locusTag} eq $preferredLocusTag
+            && scalar(@hitGenes) == 1) {
+          # Use this one instead
+          @hitGenes = ($hg);
+        } else {
+          # If it's not the preferred gene, ignore it ("collapsing")
+        }
+      } else {
+        push @hitGenes, $hg;
+      }
+      push @{ $clusteredGenes{$clusterId}{$species} }, $hg->{locusTag};
+      $clusteredGid{$clusterId}{$species}{ $hg->{gid} } = 1;
+      last if scalar(@hitGenes) >= $n;
+    }
+    last if scalar(@hitGenes) >= $n;
+  }
+  foreach my $hg (@hitGenes) {
+    my $clusterId = $hg->{clusterId};
+    my $species = $hg->{species};
+    $hg->{nGenomes} = scalar keys %{ $clusteredGid{$clusterId}{$species} };
+    $hg->{genes} =  $clusteredGenes{$clusterId}{$species};
+  }
+  return \@hitGenes;
 }
 
 sub hitsToRandomGenes($$$) {

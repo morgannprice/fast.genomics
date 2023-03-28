@@ -24,11 +24,15 @@ use MOTree; # from PaperBLAST/lib/
 # order (which subdb to use)
 # n -- max number of hits to show
 # kb -- how many kilobases to show
-# hitType -- top, random, or randomAny; top means show top hits and is the default;
-#	random means select that many random good hits; randomAny means random N hits
+# hitType -- top, topCollapse, random, or randomAny;
+#   top means show top hits and is the default;
+#   topCollapse means show top hits but collapse cluster x species (subdbs only);
+#   random means select that many random good hits;
+#   randomAny means random N hits
 # format -- empty (default -- shows an svg) or fasta (proteins sequences of homologs shown)
 #     or tsv (tab-delimited table of all genes shown)
 # tree -- set to build a tree (if needed) and render it
+
 my $cgi = CGI->new;
 setOrder(param('order'));
 my ($gene, $seqDesc, $seq) = getGeneSeqDesc($cgi);
@@ -41,7 +45,9 @@ $kbShown = min(40, max(2, $kbShown));
 my $ntShown = $kbShown * 1000;
 my $kbWidth = int(0.5 + 150 / ($kbShown/6));
 my $hitType = $cgi->param('hitType') || 'top';
+$hitType = 'top' if $hitType eq 'topCollapse' && getOrder() eq "";
 my $showTree = $cgi->param('tree') || 0;
+my $collapseSpecies = getOrder() ne "" && ($cgi->param('collapse') || 0);
 
 if (defined $gene && ! $seq) {
   # should not be reachable, but redirect to gene page just in case
@@ -105,7 +111,7 @@ if ($format eq "") {
 if (defined $gene) {
   print p(a({-href => addOrderToURL("gene.cgi?locus=$locusTag")}, "$locusTag"),
           "from",
-          a({ -href => "genome.cgi?gid=$genome->{gid}" },
+          a({ -href => addOrderToURL("genome.cgi?gid=$genome->{gid}") },
               i(encode_entities($genome->{gtdbSpecies})),
               encode_entities($genome->{strain}))
           .":",
@@ -129,6 +135,10 @@ my $listLabel = "hits";
 my $nTot = scalar(@$hits);
 if ($hitType eq "top") {
   $geneHits = hitsToTopGenes($hits, $n);
+} elsif ($hitType eq "topCollapse") {
+  die "Cannot collapse for top-level db" if getOrder() eq "";
+  $geneHits = hitsToTopGenesClustered($hits, $n,
+                                      defined $gene ? $gene->{locusTag} : "");
 } elsif ($hitType eq "randomAny") {
   $geneHits = hitsToRandomGenes($hits, $n, 0); # threshold score of 0
 } elsif ($hitType eq "random") {
@@ -161,6 +171,10 @@ if ($format eq "") {
             commify(scalar(@$geneHits)),
             "hits, out of at least",
             commify($nTot));
+  } elsif ($hitType eq "topCollapse") {
+    print p("Showing $kbShown kb around the top",
+            commify(scalar(@$geneHits)),
+            "clusters x species");
   } else {
     print p("Showing $kbShown kb around",
             commify(scalar(@$geneHits)),
@@ -172,13 +186,16 @@ if ($format eq "") {
   # Show options form
   my $randomOption = "";
   my $treeChecked = $showTree ? "CHECKED" : "";
+  my $topValues = getOrder() eq "" ? [qw{top randomAny random}]
+    : [qw{top topCollapse randomAny random}];
   print
     start_form( -name => 'input', -method => 'GET', -action => 'neighbors.cgi' ),
       geneSeqDescSeqHidden($gene, $seqDesc, $seq),
       p('Hits to show:',
         popup_menu(-name => 'n', -values => [25, 50, 100, 150, 200], -default => $n),
-        popup_menu(-name => 'hitType', -values => ["top", "randomAny", "random"],
+        popup_menu(-name => 'hitType', -values => $topValues,
                    -labels => { 'top' => 'top hits',
+                                'topCollapse' => 'top clusters x species',
                                 'randomAny' => 'random hits',
                                 'random' => 'random good hits' },
                    -default => $hitType),
@@ -410,8 +427,18 @@ foreach my $hit (@$geneHits) {
     my $taxonURL = encode_entities(addOrderToURL("taxon.cgi?level=$level&taxon=".uri_escape($taxon)));
     push @lineage, qq[<a xlink:href=$taxonURL><tspan font-size="75%">$taxon</tspan></a>];
   }
-  my $xDomain = $genesLeft + 150;
-  my $xLineage = $genesLeft + 165;
+  my $xDomain = $genesLeft + 140;
+  my $xLineage = $genesLeft + 155;
+  my $subGene = "";
+  if (exists $hit->{genes} && exists $hit->{nGenomes}) {
+    my $nGenes = scalar(@{ $hit->{genes} });
+    if ($nGenes > 1) {
+      my $URL = encode_entities(addOrderToURL("genes.cgi?" . join("&", map "g=$_", @{ $hit->{genes} })));
+      my $strains = $hit->{nGenomes} > 1 ? "$hit->{nGenomes} strains" : "1 strain";
+      $subGene = qq{<a xlink:href=$URL><tspan font-size="66%">$nGenes in $strains</tspan></a>};
+    }
+  }
+
   push @svgLines,
     qq[<text x="$genesLeft" y="$yAt" font-size="90%"><title>$hitDetails</title>${identity}% id, $hit->{bits} bits</text>],
     qq[<text x="$xDomain" y="$yAt" font-family="bold" font-size="90%" fill=$domainColor>],
@@ -422,7 +449,9 @@ foreach my $hit (@$geneHits) {
     qq[<tspan font-style="italic" font-size="90%">],
     qq[<title>strain $hitGenome->{strain} ($hitGenome->{gid})</title>],
     encode_entities($hitGenome->{gtdbSpecies}),
-    qq[</tspan></a></text>];
+    qq[</tspan></a>],
+    $subGene,
+    qq[</text>];
   $yAt += 6;
   $hit->{yTrack} = $yAt + 9; # remember gene location for the future. This is the middle of the track
   my $mid = ($hit->{begin} + $hit->{end})/2;
