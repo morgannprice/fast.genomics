@@ -10,16 +10,22 @@ use lib "../lib";
 use lib "../../PaperBLAST/lib";
 use neighborWeb;
 
+# CGI arguments:
+# gene or seq and seqDesc
+# order (optional)
+
 my $cgi = CGI->new;
+setOrder(param('order'));
+
 my ($gene, $seqDesc, $seq) = getGeneSeqDesc($cgi);
 die "Not protein sequence\n" unless defined $seq;
 
-unless (hasMMSeqsHits($seq)) {
+unless (hasHits($seq)) {
   print redirect(-url => "findHomologs.cgi?" . geneSeqDescSeqOptions($gene,$seqDesc,$seq));
   exit(0);
 }
 
-my $hits = getMMSeqsHits($seq);
+my $hits = getHits($seq);
 if (scalar(@$hits) == 0) {
   start_page('title' => 'Error');
   print p("Sorry, no homologs were found for this sequence");
@@ -29,6 +35,7 @@ my $geneHits = hitsToGenes($hits);
 my $genomes = getDbHandle()->selectall_hashref("SELECT * from Genome", "gid");
 
 my $fileName = "homologs_";
+$fileName = getSubDb() . "_" . $fileName if getOrder() ne "";
 if (defined $gene) {
   $fileName .= $gene->{locusTag};
 } else {

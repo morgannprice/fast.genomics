@@ -12,10 +12,13 @@ use neighbor;
 use lib "../../PaperBLAST/lib";
 use neighborWeb;
 
-# CGI arguments:
+# required CGI arguments:
 # gid -- which genome to search in
 # query -- terms to search, either match the locus tag or protein id, or search in the description
+# optional CGI arguments:
+# order (which subdb to use)
 my $cgi = CGI->new;
+setOrder(param('order'));
 my $gid = $cgi->param('gid') || "Must specify gid";
 my $query = $cgi->param('query') || "";
 $query =~ s/^\s+//;
@@ -29,7 +32,7 @@ if (! $geneRedirect && $query =~ m/^[a-zA-Z0-9_.]+$/) {
   $geneRedirect = $genesFromProteinId->[0] if @$genesFromProteinId == 1;
 }
 if ($geneRedirect) {
-  print redirect(-url => "gene.cgi?locus=" . $geneRedirect->{locusTag});
+  print redirect(-url => addOrderTourl("gene.cgi?locus=" . $geneRedirect->{locusTag}));
   exit(0);
 }
 
@@ -47,7 +50,7 @@ if ($query ne "") {
                                        $gid,
                                        "${query}%", "%-${query}%",
                                        "% ${query}%", "% (${query}%");
-  my $genomeLink = a({-href => "genome.cgi?gid=$gid"},
+  my $genomeLink = a({-href => addOrderToURL("genome.cgi?gid=$gid")},
                      i(encode_entities($genome->{gtdbSpecies})), 
                      encode_entities($genome->{strain}));
   if (@$genes == 0) {
@@ -56,7 +59,7 @@ if ($query ne "") {
     print p("Found", scalar(@$genes), "genes matching", encode_entities($query), "in", $genomeLink);
     foreach my $gene (@$genes) {
       my $locusTag = $gene->{locusTag};
-      print p(a({href => "gene.cgi?locus=$locusTag"}, $locusTag),
+      print p(a({href => addOrderToURL("gene.cgi?locus=$locusTag")}, $locusTag),
               $gene->{proteinId}, $gene->{desc});
     }
   }
@@ -65,6 +68,7 @@ if ($query ne "") {
 # Search form
 print
   start_form(-name => 'search', -method => 'GET', -action => 'genomeSearch.cgi'),
+  orderToHidden(),
   qq{<INPUT type="hidden" name="gid" value="$gid" />},
   p("Try another search:", br(),
     qq{<INPUT type="text" name="query" size=40 maxLength=1000 />},

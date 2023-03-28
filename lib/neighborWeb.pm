@@ -9,6 +9,7 @@ use Time::HiRes qw{gettimeofday tv_interval};
 use Digest::MD5 qw{md5_hex};
 use URI::Escape;
 use HTML::Entities;
+use List::Util qw{max};
 
 # from the PaperBLAST code base
 use pbweb qw{GetMotd commify
@@ -21,11 +22,12 @@ use clusterBLASTp;
 
 our (@ISA,@EXPORT);
 @ISA = qw(Exporter);
-@EXPORT = qw{getDbHandle getSubDbHandle
-             parseGeneQuery hasMMSeqsHits getMMSeqsHits
+@EXPORT = qw{setOrder getOrder getSubDb addOrderToURL orderToHidden
+             getDbHandle getTopDbHandle getSubDbHandle
+             hasHits getHits
+             hitsToGenes hitsToTopGenes hitsToRandomGenes
              parseGeneQuery
              getGeneSeqDesc geneSeqDescSeqOptions geneSeqDescSeqHidden
-             hitsToGenes hitsToTopGenes hitsToRandomGenes
              start_page finish_page
              locusTagToGene getNearbyGenes gidToGenome
              showSequence formatFastaHtml proteinAnalysisLinks
@@ -36,83 +38,178 @@ our (@ISA,@EXPORT);
              geneHitsToProteinAlignment geneHitsToTree
              getSubDbHomologs};
 
-my $memDbh = undef;
-sub getDbHandle() {
-  if (!defined $memDbh) {
-    my $sqldb = "../data/neighbor.db";
-    $memDbh = DBI->connect("dbi:SQLite:dbname=$sqldb","","",{ RaiseError => 1 }) || die $DBI::errstr;
+# If the order is set to non-empty, then getDbHandle() will return a subdb handle.
+# Otherwise, getDbHandle() will return the top-level handle.
+
+my $memOrder = "";
+my $memSubDb = undef;
+sub getOrder() { return $memOrder; }
+sub getSubDb() { return $memSubDb; }
+
+sub setOrder($) {
+  my ($order) = @_;
+  if (defined $order && $order ne "") {
+    $memOrder = $order;
+    my ($prefix) = getTopDbHandle()->selectrow_array("SELECT prefix FROM SubDb WHERE taxon = ?",
+                                                     {}, $memOrder);
+    die "Order $order has no subdb" unless defined $prefix;
+    $memSubDb = $prefix;
+    die "Invalid prefix $prefix" unless $prefix =~ m/^[a-zA-Z0-9._-]+$/;
   }
-  return $memDbh;
 }
 
-my $memSubDbh = undef;
-my $memSubDb = undef;
-sub getSubDbHandle($) {
-  my ($subDb) = @_;
-  die "Invalid subdb: $subDb\n" unless $subDb =~ m/^[a-zA-Z0-9_.-]+$/;
-  if (defined $memSubDbh) {
-    die "New subDb $subDb vs. $memSubDb" unless $memSubDb eq $subDb;
-  } else {
-    my $sqldb = "../data/$subDb/sub.db";
+# If the order is set, add it to the URL; otherwise returns the input URL
+sub addOrderToURL($) {
+  my ($URL) = @_;
+  return $URL if $memOrder eq "";
+  return "${URL}&order=${memOrder}" if $URL =~ m/[?]/;
+  return "${URL}?order=${memOrder}";
+}
+
+sub orderToHidden() {
+  return "" if $memOrder eq "";
+  return qq[<INPUT type="hidden" name="order" value="$memOrder">];
+}
+
+my $memTopDbh = undef;
+sub getTopDbHandle() {
+  if (!defined $memTopDbh) {
+    my $sqldb = "../data/neighbor.db";
+    $memTopDbh = DBI->connect("dbi:SQLite:dbname=$sqldb","","",{ RaiseError => 1 }) || die $DBI::errstr;
+  }
+  return $memTopDbh;
+}
+
+my $memSubDbh;
+sub getSubDbHandle {
+  if (!defined $memSubDbh) {
+    my $sqldb = "../data/$memSubDb/sub.db";
     $memSubDbh = DBI->connect("dbi:SQLite:dbname=$sqldb","","",{ RaiseError => 1 }) || die $DBI::errstr;
-    $memSubDb = $subDb;
   }
   return $memSubDbh;
 }
 
-sub getHitsFile($) {
+sub getDbHandle {
+  return $memOrder eq "" ? getTopDbHandle() : getSubDbHandle();
+}
+
+sub hitsFile($) {
   my ($seq)= @_;
   $seq = uc($seq);
-  die "Invalid sequence for getHitsFile: $seq" unless $seq =~ m/^[A-Z]+$/;
+  die "Invalid sequence for hitsFile: $seq" unless $seq =~ m/^[A-Z]+$/;
   my $md5 = md5_hex($seq);
-  return "../tmp/hits/$md5.hits";
+  my $subDb = getSubDb();
+  my $prefix = "";
+  $prefix = $subDb . "_" if defined $subDb;
+  return "../tmp/hits/${prefix}${md5}.hits";
 }
 
-sub getMMSeqsDb {
-  return "../data/neighbor.sliced";
+sub getSequenceDb {
+  my $subDb = getSubDb();
+  return "../data/neighbor.sliced" if !defined $subDb;
+  return "../data/${subDb}/cluster.faa";
 }
 
-sub hasMMSeqsHits($) {
+sub hasHits($) {
   my ($seq) = @_;
-  return NewerThan(getHitsFile($seq), getMMSeqsDb());
+  my $seqDb = getSequenceDb();
+  $seqDb .= ".pin" if defined getSubDb();
+  return NewerThan(hitsFile($seq), $seqDb);
 }
 
 # From a protein sequence to a reference list of hits (each a hash),
-# as parsed by readMMSeqsHits.
+# as parsed by readMMSeqsHits or parseBLASTpHits.
+# (identity will be a fraction not a percentage)
+sub getHits($) {
+  my ($seq) = @_;
+  my $subDb = getSubDb();
+  if (defined $subDb) {
+    return parseBLASTpHits(hitsFile($seq))
+      if (hasHits($seq));
+    my $hits = computeSubDbHomologs($seq);
+    saveBLASTpHits($hits, hitsFile($seq));
+    return $hits;
+  }
+  #else
+  saveMMSeqsHits($seq) unless hasHits($seq);
+  return readMMSeqsHits(hitsFile($seq));
+}
+
 # Caches the results in ../tmp/hits/md5.hits
 # Uses a temporary subdirectory of ../data/tmp as the temporary directory for mmseqs2
-sub getMMSeqsHits($) {
+# Returns nothing.
+sub saveMMSeqsHits($) {
   my ($seq) = @_;
-  my $mmseqsDb = getMMSeqsDb();
-  my $hitsFile = getHitsFile($seq);
-  unless (NewerThan($hitsFile, $mmseqsDb)) {
-    die "No such file: $mmseqsDb" unless -e $mmseqsDb;
+  my $mmseqsDb = getSequenceDb();
+  my $hitsFile = hitsFile($seq);
+  die "No such file: $mmseqsDb" unless -e $mmseqsDb;
 
-    my $md5 = md5_hex($seq);
-    my $faaFile = "../tmp/$md5.$$.faa";
-    open(my $fhFaa, ">", $faaFile) || die "Cannot write to $faaFile";
-    print $fhFaa ">query\n$seq\n";
-    close($fhFaa) || die "Error writing to $faaFile";
-    my $tmpOut = "$hitsFile.$$";
-    my $procId = $$;
-    my $startTime = [gettimeofday()];
-    my $timestamp = join(".",@$startTime);
-    # higher sensitivity setting for shorter queries
-    my $mmseqsSens = length($seq) <= 150 ? 7 : 6;
-    my ($nGenomes) = getDbHandle()->selectrow_array("SELECT COUNT(*) FROM Genome");
-    my $maxSeqs = int(1.5 * $nGenomes + 0.5);
-    my $cmd = "../bin/searchSliced.pl -in $faaFile -sliced $mmseqsDb -out $tmpOut"
-      . " -max-seq $maxSeqs -limit $nGenomes -db-load-mode 2 -s $mmseqsSens";
-    print CGI::p("Searching for similar proteins with mmseqs2",
-                 CGI::small(runTimerHTML())), "\n";
-    runWhileCommenting($cmd) == 0
-      || die "Error running $cmd -- $!";
-    rename($tmpOut, $hitsFile) || die "Renaming $tmpOut to $hitsFile failed";
-    unlink($faaFile);
-    my $elapsed = tv_interval($startTime);
-    print CGI::p(sprintf("mmseqs2 finished in %.1f seconds", $elapsed))."\n";
+  my $faaFile = "/tmp/neighborWeb.$$.faa";
+  open(my $fhFaa, ">", $faaFile) || die "Cannot write to $faaFile";
+  print $fhFaa ">query\n$seq\n";
+  close($fhFaa) || die "Error writing to $faaFile";
+
+  my $tmpOut = "$hitsFile.$$";
+  my $startTime = [gettimeofday()];
+  my $mmseqsSens = length($seq) <= 150 ? 7 : 6;
+  my ($nGenomes) = getTopDbHandle()->selectrow_array("SELECT COUNT(*) FROM Genome");
+  my $maxSeqs = int(1.5 * $nGenomes + 0.5);
+  my $cmd = "../bin/searchSliced.pl -in $faaFile -sliced $mmseqsDb -out $tmpOut"
+    . " -max-seq $maxSeqs -limit $nGenomes -db-load-mode 2 -s $mmseqsSens";
+  print CGI::p("Searching for similar proteins with mmseqs2",
+               CGI::small(runTimerHTML())), "\n";
+  runWhileCommenting($cmd) == 0
+    || die "Error running $cmd -- $!";
+  rename($tmpOut, $hitsFile) || die "Renaming $tmpOut to $hitsFile failed";
+  unlink($faaFile);
+  my $elapsed = tv_interval($startTime);
+  print CGI::p(sprintf("mmseqs2 finished in %.1f seconds", $elapsed))."\n";
+}
+
+# Given a subdb and a sequence, compute the homologs. Returns a reference to a list of hashes,
+# each containg subject, eValue, etc.
+sub computeSubDbHomologs($) {
+  my ($seq) = @_;
+  my $hitsFile = hitsFile($seq);
+  my $clusterDb = getSequenceDb();
+  die "No such file: $clusterDb.pin" unless -e "$clusterDb.pin";
+
+  my $blastall = "../bin/blast/blastall";
+  die "No such executable: $blastall" unless -x $blastall;
+  my $formatdb = "../bin/blast/formatdb";
+  die "No such executable: $formatdb" unless -x $formatdb;
+
+  print "<P><small>Running BLASTp.</small>\n";
+  my $hits1 = runBLASTp('blastall' => $blastall, 'query' => $seq, 'db' => $clusterDb,
+                        'eValue' => 1e-3, 'nCPUs' => 12);
+  if (@$hits1 == 0) {
+    # save the empty hits file
+    open(my $fh, ">", $hitsFile) || die "Cannot write to $hitsFile";
+    close($fh) || die "Error writing to $hitsFile";
+    return [];
   }
-  return readMMSeqsHits($hitsFile);
+
+  #else
+  print "<small>Processing " . scalar(@$hits1) . " clusters and re-running BLASTp.</small>\n";
+  my %clusterIds = map { $_->{subject} => 1 } @$hits1;
+  my @clusterIds = sort keys %clusterIds;
+  my $subDbh = getSubDbHandle();
+  my $proteinIds = expandByClusters(\@clusterIds, $subDbh);
+  my $tmpPre = "/tmp/neighborWeb.$$";
+  proteinsToFaa($proteinIds, "$tmpPre.faa", $subDbh);
+  formatBLASTp($formatdb, "$tmpPre.faa");
+  my ($dbSize) = $subDbh->selectrow_array("SELECT nClusteredAA FROM ClusteringInfo");
+  my $hits = runBLASTp('blastall' => $blastall, 'query' => $seq, 'db' => "$tmpPre.faa",
+            'eValue' => 1e-3, 'nCPUs' => 2, 'dbSize' => $dbSize);
+  unlink("$tmpPre.faa");
+  foreach my $suffix (qw{phr pin psq}) {
+    unlink("$tmpPre.faa.$suffix");
+  }
+  # Limit the number of hits
+  my ($nGenomes) = getDbHandle()->selectrow_array("SELECT COUNT(*) FROM Genome;");
+  my $nMaxHits = max(int(1.5 * $nGenomes + 0.5), 200);
+  splice @$hits, $nMaxHits if scalar(@$hits) > $nMaxHits;
+  return $hits;
 }
 
 # The query may be a locus tag in the database,
@@ -200,7 +297,7 @@ sub parseGeneQuery($) {
     return ("error" => "Text queries must start with a genus, but genus "
             . encode_entities($genus) . " is not in the database")
       if @$genomes == 0;
-    return ("error" => "More than one genome matches " . encode_entities($genus))
+    print "<p>Multiple genomes match " . encode_entities($genus) . " &mdash; searching just one</p>\n"
       if @$genomes > 1;
     my $genome = $genomes->[0];
     my $wordQuery = join(" ", @parts);
@@ -309,9 +406,16 @@ sub start_page {
   my $title = $param{title} || "";
   my ($nGenomes) = getDbHandle()->selectrow_array("SELECT COUNT(*) FROM Genome");
   $nGenomes = commify($nGenomes);
-  my $banner = $param{banner} || "<i>fast.genomics</i> &ndash; "
-    . qq{<SPAN style="font-size:smaller;"> compare $nGenomes genera of bacteria and archaea</SPAN>};
-  my $bannerURL = $param{bannerURL} || 'search.cgi';
+  my $order = getOrder();
+  my $banner = "<i>fast.genomics</i>";
+  if ($order eq "") {
+    $banner .= qq{  &ndash; <SPAN style="font-size: 80%;">compare $nGenomes genera of bacteria &amp; archaea</SPAN>};
+  } else {
+    $banner .= qq{ <SPAN style="font-size: 80%;">for $nGenomes $order</SPAN>};
+    $banner .= qq{ <A style="font-size: 65%; text-decoration: none; color: #444444;" HREF="search.cgi">or compare diverse bacteria &amp; archaea</A>};
+  }
+  $banner = $param{banner} || $banner;
+  my $bannerURL = $param{bannerURL} || addOrderToURL('search.cgi');
   print
     CGI::header(-charset => 'utf-8'),
     CGI::start_html(-head => CGI::Link({-rel => "shortcut icon", -href => "../static/favicon.ico"}),
@@ -423,18 +527,30 @@ sub getGeneSeqDesc($) {
 
 sub geneSeqDescSeqOptions($$$) {
   my ($gene, $seqDesc, $seq) = @_;
-  return "locus=$gene->{locusTag}" if defined $gene;
-  my $seqDescE = encode_entities($seqDesc);
-  return "seqDesc=$seqDescE&seq=$seq";
+  my $options;
+  if (defined $gene) {
+    $options = "locus=$gene->{locusTag}";
+  } else {
+    my $seqDescE = encode_entities($seqDesc);
+    $options = "seqDesc=$seqDescE&seq=$seq";
+  }
+  $options .= "&order=$memOrder" if $memOrder ne "";
+  return $options;
 }
 
 sub geneSeqDescSeqHidden($$$) {
   my ($gene, $seqDesc, $seq) = @_;
-  return qq[<INPUT type="hidden" name="locus" value="$gene->{locusTag}">]
-    if defined $gene;
-  my $seqDescE = encode_entities($seqDesc);
-  return qq[<INPUT type="hidden" name="seqDesc" value="$seqDescE">]
-    . qq[<INPUT type="hidden" name="seq" value="$seq">];
+  my @out;
+  if (defined $gene) {
+    push @out, qq[<INPUT type="hidden" name="locus" value="$gene->{locusTag}">];
+  } else {
+    my $seqDescE = encode_entities($seqDesc);
+    push @out,
+      qq[<INPUT type="hidden" name="seqDesc" value="$seqDescE">],
+      qq[<INPUT type="hidden" name="seq" value="$seq">];
+  }
+  push @out, orderToHidden();
+  return join("\n", @out)."\n";
 }
 
 # Given a list of objects, fetch their protein sequences and cluster them using lastal.
@@ -515,7 +631,9 @@ sub domainHtml($) {
   my $domainChar = $domain eq "Bacteria" ? "B" : "A";
   my $domainColor = $domainChar eq "B" ? "blue" : "green";
   my $URL = "taxon.cgi?level=domain&taxon=$domain";
-  return qq[<a title="$domain" style="color: ${domainColor}; text-decoration: none;" href="$URL">$domainChar</a>];
+  my $title = $domain;
+  $title = "See $domain in the main database" if getOrder() ne "";
+  return qq[<a title="$title" style="color: ${domainColor}; text-decoration: none;" href="$URL">$domainChar</a>];
 }
 
 # Returns a hash of level => taxon => row from Taxon table
@@ -533,7 +651,12 @@ my @levelsOrdered = qw{domain phylum class order family genus species};
 my %levelToParent = map { $levelsOrdered[$_] => $levelsOrdered[$_-1] } (1..6);
 my %levelToChild = map { $levelToParent{$_} => $_ } (keys %levelToParent);
 
-sub taxLevels() { return @levelsOrdered };
+# Taxon levels to use in the interface
+sub taxLevels() {
+  return @levelsOrdered if getOrder() eq "";
+  #else
+  return qw{order family genus species};
+}
 
 sub taxLevelToParent($) {
   my ($level) = @_;
@@ -560,6 +683,8 @@ sub taxToParts($$) {
       last;
     } else {
       my $level = $levelToParent{ $tax->{level} } || die $tax->{level};
+      # Levels class and above are absent from sub-databases
+      last if getOrder() ne "" && $level eq "class";
       my $parent = $tax->{parent};
       die "No taxon for $parent at level $level"
         unless exists $taxa->{$level}{$parent};
@@ -622,7 +747,7 @@ sub geneHitsToProteinAlignment {
     }
     close($fhFaa) || die "Error writing to $faaFile\n";
     my $muscleOptions = "-maxiters 2 -maxmb 1000";
-    print CGI::p(CGI::small("Running muscle")), "\n";
+    print "<P><small>Running muscle.</small></P>\n";
     my $cmd = "$muscle -quiet $muscleOptions < $faaFile > $tmpFile";
     system($cmd) == 0 || die "$cmd\nfailed: $!";
     rename($tmpFile, $alnFile) || die "Cannot rename to $tmpFile to $alnFile";
@@ -679,7 +804,7 @@ sub geneHitsToTree {
     close($fhAln) || die "Error writing to $alnFile\n";
     my $tmpFile = "$treeFile.tmp";
     my $cmd = "$fastTree -quiet < $alnFile > $tmpFile";
-    print CGI::p(CGI::small("Running FastTree"));
+    print "<P><small>Running FastTree.</small></P>\n";
     system($cmd) == 0 || die "$cmd\nfailed: $!\n";
     rename($tmpFile, $treeFile) || die "Cannot rename to $tmpFile to $treeFile";
     unlink($alnFile);
@@ -687,62 +812,4 @@ sub geneHitsToTree {
   return MOTree::new( file => $treeFile );
 }
 
-sub computeSubDbHomologs($$) {
-  my ($subDb, $seq) = @_;
-  die "Invalid sequence" unless $seq =~ m/^[A-Z]+$/;
-  my $subDir = "../data/$subDb";
-  my $clusterDb = "$subDir/cluster.faa";
-  die "No such file: $clusterDb.pin" unless -e "$clusterDb.pin";
-
-  my $blastall = "../bin/blast/blastall";
-  die "No such executable: $blastall" unless -x $blastall;
-  my $formatdb = "../bin/blast/formatdb";
-  die "No such executable: $formatdb" unless -x $formatdb;
-
-  my $tmpPre = "/tmp/neighborWeb.$$";
-  print CGI::p("Running BLASTp");
-  my $hits1 = runBLASTp('blastall' => $blastall, 'query' => $seq, 'db' => $clusterDb,
-                        'eValue' => 1e-3, 'nCPUs' => 10);
-  return [] if @$hits1 == 0;
-
-  print CGI::p("Found", scalar(@$hits1), " clustered hits"), "\n";
-  print CGI::p("Processing the hits and re-running BLASTp"), "\n";
-  my %clusterIds = map { $_->{subject} => 1 } @$hits1;
-  my @clusterIds = sort keys %clusterIds;
-  my $subDbh = getSubDbHandle($subDb);
-  my $proteinIds = expandByClusters(\@clusterIds, $subDbh);
-  print CGI::p("Expanded to", scalar(@$proteinIds), "proteins"),"\n";
-  proteinsToFaa($proteinIds, "$tmpPre.faa", $subDbh);
-  formatBLASTp($formatdb, "$tmpPre.faa");
-  my ($dbSize) = $subDbh->selectrow_array("SELECT nClusteredAA FROM ClusteringInfo");
-  my $hits = runBLASTp('blastall' => $blastall, 'query' => $seq, 'db' => "$tmpPre.faa",
-                       'eValue' => 1e-3, 'nCPUs' => 2, 'dbSize' => $dbSize);
-  unlink("$tmpPre.faa");
-  foreach my $suffix (qw{phr pin psq}) {
-    unlink("$tmpPre.faa.$suffix");
-  }
-  print CGI::p("Returning",scalar(@$hits),"hits"),"\n";
-  return $hits;
-}
-
-# Given a subdb and a sequence, compute the homologs. Returns a reference to a list of hashes,
-# each containg subject, eValue, etc.
-sub getSubDbHomologs($$) {
-  my ($subDb, $seq) = @_;
-  $seq = uc($seq);
-  my $subDir = "../data/$subDb";
-  my $clusterDb = "$subDir/cluster.faa";
-  die "No such file: $clusterDb.pin" unless -e "$clusterDb.pin";
-  my $md5 = md5_hex($seq);
-  my $md5 = md5_hex($seq);
-  my $hitsFile = "../tmp/hits/${subDb}_$md5.hits";
-
-  if (NewerThan($hitsFile, $clusterDb.".pin")) {
-    return parseBLASTpHits($hitsFile);
-  } else {
-    my $hits = computeSubDbHomologs($subDb, $seq);
-    saveBLASTpHits($hits, $hitsFile);
-    return $hits;
-  }
-}
 1;

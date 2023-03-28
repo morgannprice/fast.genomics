@@ -13,9 +13,12 @@ use lib "../../PaperBLAST/lib";
 use neighborWeb;
 use pbweb qw{commify};
 
-# CGI arguments:
+# required CGI arguments:
 # g -- list of locus tags
+# optional CGI arguments:
+# order (which subdb to use)
 my $cgi = CGI->new;
+setOrder(param('order'));
 my @g = $cgi->param('g');
 splice @g, 250 if @g > 250;
 my @genes = map { locusTagToGene($_) || die "Unknown locusTag $_" } @g;
@@ -37,11 +40,12 @@ autoflush STDOUT 1; # show preliminary results
 if ($constGenome) {
   print p("Lineage:",
           domainHtml($constGenome),
-          map(a({-href => "taxon.cgi?level=".lc($_)."&taxon=" . uri_escape($constGenome->{"gtdb$_"}),
+          map(a({-href => addOrderToURL("taxon.cgi?level=".lc($_)."&taxon="
+                                        . uri_escape($constGenome->{"gtdb$_"})),
                  -title => lc($_),
                  -style => "text-decoration: none;"}, $constGenome->{"gtdb$_"}),
                 qw{Phylum Class Order Family}),
-          a({-href => "genome.cgi?gid=$constGenome->{gid}",
+          a({-href => addOrderToURL("genome.cgi?gid=$constGenome->{gid}"),
              -style => "text-decoration:none;"},
             i($constGenome->{gtdbSpecies})),
           $constGenome->{strain});
@@ -52,7 +56,7 @@ if ($constGenome) {
   foreach my $gene (@genes) {
     my $bgColor = $iRow % 2 == 0 ? "lightgrey" : "white";
     print Tr({-style => "background-color: $bgColor;"},
-             td([ a({-href => "gene.cgi?locus=$gene->{locusTag}" }, $gene->{locusTag}),
+             td([ a({-href => addOrderToURL("gene.cgi?locus=$gene->{locusTag}") }, $gene->{locusTag}),
                   small($gene->{proteinId}),
                   encode_entities($gene->{desc}),
                   commify($gene->{begin}),
@@ -64,17 +68,34 @@ if ($constGenome) {
 } else {
   foreach my $gene (@genes) {
     my $genome = gidToGenome($gene->{gid}) || die $gene->{gid};
+    my @lineage = ();
+    foreach my $level (qw{phylum class order family}) {
+      my $field = "gtdb" . capitalize($level);
+      my $tax = $genome->{$field};
+      my $URL = "taxon.cgi?level=$level&taxon=".uri_escape($tax);
+      if (getOrder() ne "" && ($level eq "phylum" || $level eq "class")) {
+        # Cannot link to this taxon in the subdb.
+        push @lineage, a( {-href => $URL,
+                           -title => "See $level $tax in the main database",
+                           -style => "text-decoration: none; color: black;" },
+                          $tax);
+      } else {
+        push @lineage, a( {-href => addOrderToURL($URL),
+                           -title => $level,
+                           -style => "text-decoration: none;" },
+                          $tax);
+      }
+    }
     print p(domainHtml($genome),
-            map(a({ -href => "taxon.cgi?level=".lc($_)."&taxon=" . uri_escape($genome->{"gtdb$_"}),
-                    -title => lc($_),
-                    -style => "text-decoration: none;"}, $genome->{"gtdb$_"}),
-                qw{Phylum Class Order Family}),
-            a({-href => "genome.cgi?gid=$genome->{gid}",
+            ":",
+            join(" : ", @lineage),
+            ":",
+            a({-href => addOrderToURL("genome.cgi?gid=$genome->{gid}"),
                -style => "text-decoration:none;"},
               i($genome->{gtdbSpecies})),
             $genome->{strain},
             br(),
-            a({-href => "gene.cgi?locus=$gene->{locusTag}"}, $gene->{locusTag}),
+            a({-href => addOrderToURL("gene.cgi?locus=$gene->{locusTag}")}, $gene->{locusTag}),
             small($gene->{proteinId}),
             $gene->{desc});
   }

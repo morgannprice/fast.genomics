@@ -14,10 +14,13 @@ use pbweb qw{commify};
 
 # CGI arguments:
 # gid -- which genome to show information about
-# optional arguments: format = tsv or faa
+# optional arguments:
+# order (which subdb to use)
+# format = tsv or faa
 
 my $cgi = CGI->new;
 my $gid = $cgi->param('gid') || die "Must specify gid";
+setOrder(param('order'));
 
 my $genome = gidToGenome($gid);
 die "Unknown gid" unless defined $genome;
@@ -57,14 +60,23 @@ print p("Genome identifier:", a({-href => "https://www.ncbi.nlm.nih.gov/data-hub
 
 print p("NCBI assembly name:", encode_entities($genome->{assemblyName}));
 
-print p("GTDB taxonomy:",
-        join(", ",
-           map a({ -title => lc($_),
-                   -style => "text-decoration: none;",
-                   -href => "taxon.cgi?level=".lc($_)."&taxon="
-                   . uri_escape($genome->{"gtdb" . $_}) },
-                 encode_entities($genome->{"gtdb" . $_})),
-             qw[Domain Phylum Class Order Family Genus Species]));
+my @lineage = ();
+foreach my $level (qw[Domain Phylum Class Order Family Genus Species]) {
+  my $title = lc($level);
+  my $href = "taxon.cgi?level=".lc($level)."&taxon=" . uri_escape($genome->{"gtdb" . $level});
+  my $style = "text-decoration: none;";
+  if (getOrder() eq ""
+      || ($level ne "Domain" && $level ne "Phylum" && $level ne "Class")) {
+    $href = addOrderToURL($href);
+  } else {
+    # link out
+    $title = "View this " . lc($level) . " in the main database";
+    $style .= "color: black;";
+  }
+  push @lineage, a({ -title => $title, -style => $style, -href => $href },
+                   encode_entities($genome->{"gtdb" . $level}));
+}
+print p("GTDB taxonomy:", @lineage);
 
 my @ncbi = map { s/^[a-z]__//; $_ } split /;/, $genome->{ncbiTaxonomy};
 @ncbi = grep $_ ne "", @ncbi;
@@ -78,11 +90,13 @@ my ($nScaffolds) = getDbHandle()->selectrow_array("SELECT COUNT(DISTINCT scaffol
                                                   {}, $gid);
 print p("Scaffolds:", commify($nScaffolds),
         "Genes:",
-        a({-href => "genome.cgi?gid=$gid&format=tsv", -title => "tab-delimited table",
+        a({-href => addOrderToURL("genome.cgi?gid=$gid&format=tsv"),
+           -title => "tab-delimited table",
            -style => "text-decoration: none;"},
           commify($genome->{nGenes})),
         "Protein-coding:",
-        a({-href => "genome.cgi?gid=$gid&format=faa", -title => "fasta protein sequences",
+        a({-href => addOrderToURL("genome.cgi?gid=$gid&format=faa"),
+           -title => "fasta protein sequences",
            -style => "text-decoration: none;"},
           commify($genome->{nProteins})));
 
@@ -90,6 +104,7 @@ print
   h3("Tools"),
   start_form(-name => 'search', -method => 'GET', -action => 'genomeSearch.cgi'),
   qq{<INPUT type="hidden" name="gid" value="$gid" />},
+  orderToHidden(),
   p("Search annotations:", br(),
     qq{<INPUT type="text" name="query" size=40 maxLength=1000 />},
     submit('Go')),

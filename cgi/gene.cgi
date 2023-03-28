@@ -14,10 +14,13 @@ use lib "../../PaperBLAST/lib";
 use neighborWeb;
 use pbweb qw{commify};
 
-# CGI arguments:
+# required CGI arguments:
 # locus -- a locus tag in the database (with correct capitalization)
+# optional CGI arguments:
+# order (which subdb to use)
 my $cgi = CGI->new;
 my $locusTag = param('locus') || die "locus must be specified";
+setOrder(param('order'));
 
 start_page('title' => encode_entities($locusTag));
 autoflush STDOUT 1; # show preliminary results
@@ -37,12 +40,13 @@ my $genome = gidToGenome($gid) || die "Cannot find genome $gid";
 
 my @lines = ();
 push @lines, "Genome: "
-  . a({-href => "genome.cgi?gid=$gid"}, i($genome->{gtdbSpecies}) . " " . $genome->{strain})
+  . a({-href => addOrderToURL("genome.cgi?gid=$gid")},
+      i($genome->{gtdbSpecies}) . " " . $genome->{strain})
   . " " . small("(" . a({-title => "$gid at NCBI",
               -href => "https://www.ncbi.nlm.nih.gov/assembly/$gid/" }, $gid) . ")");
 push @lines, "Lineage: "
   . join(" : ",
-         map a({ -href => "taxon.cgi?level=" . lc($_) . "&taxon=" . $genome->{"gtdb".$_},
+         map a({ -href => addOrderToURL("taxon.cgi?level=" . lc($_) . "&taxon=" . $genome->{"gtdb".$_}),
                  -title => lc($_) },
                $genome->{"gtdb".$_}),
          qw{Domain Phylum Class Order Family});
@@ -79,7 +83,7 @@ my @showGenes = grep $_->{end} >= $showBegin && $_->{begin} <= $showEnd, @$nearb
 my @showGenes2 = grep $_->{end} >= $showBegin2 && $_->{begin} <= $showEnd2, @$nearbyGenes;
 foreach my $s (@showGenes) {
   $s->{label} = $s->{locusTag};
-  $s->{URL} = "gene.cgi?locus=" . $s->{locusTag};
+  $s->{URL} = addOrderToURL("gene.cgi?locus=" . $s->{locusTag});
   $s->{color} = $s->{locusTag} eq $gene->{locusTag} ? $focalColor : "lightgrey";
 }
 
@@ -95,7 +99,7 @@ my %scaleBarSvg = scaleBarSvg('xLeft' => $genesSvg{xMax} * 0.8,
 my $svgWidth = max($genesSvg{xMax}, $scaleBarSvg{xMax});
 my $svgHeight = $scaleBarSvg{yMax};
 
-my $genesURL = "genes.cgi?" . join("&", map "g=$_->{locusTag}", @showGenes2);
+my $genesURL = addOrderToURL("genes.cgi?" . join("&", map "g=$_->{locusTag}", @showGenes2));
 print join("\n",
            qq{<TABLE width=100% border=0><TR><TD align="left" valign="top"><H3>Gene Neighborhood</h3></TD>},
            qq{<TD align="right" valign="top"><A HREF="$genesURL">or see table</A></TD></TR></TABLE>},
@@ -108,38 +112,26 @@ print join("\n",
            </svg>) . "\n";
 
 if (defined $seq) {
-  if (hasMMSeqsHits($seq)) {
+  if (hasHits($seq)) {
     print p("See",
             join(", or ",
-                 a({-href => "neighbors.cgi?locus=$locusTag"}, "gene neighborhoods"),
-                 a({-href => "hitTaxa.cgi?locus=$locusTag"}, "taxonomic distribution")
+                 a({-href => addOrderToURL("neighbors.cgi?locus=$locusTag")}, "gene neighborhoods"),
+                 a({-href => addOrderToURL("hitTaxa.cgi?locus=$locusTag")}, "taxonomic distribution")
                  . " of homologs",
-                 a({-href => "downloadHomologs.cgi?locus=$locusTag",
+                 a({-href => addOrderToURL("downloadHomologs.cgi?locus=$locusTag"),
                     -title => "tab-delimited table of homologs"}, "download homologs"),
-                 a({-href => "compare.cgi?locus=$locusTag",
+                 a({-href => addOrderToURL("compare.cgi?locus=$locusTag"),
                     -title => "compare presence/absence of homologs and their proximity"},
                    "compare presence/absence")));
   } else {
-    print p(a{ -href => "findHomologs.cgi?locus=$locusTag" }, "Find homologs with mmseqs2",
+    print p(a({ -href => addOrderToURL("findHomologs.cgi?locus=$locusTag") },
+              getOrder() eq "" ? "Find homologs with mmseqs2" : "Find homologs with clustered BLAST"),
             "(fast)");
   }
   print showSequence($locusTag . " " . $gene->{desc}, $seq);
 }
 
 print "\n";
-
-# Genes as table -- maybe another page ?
-#my $iMax = scalar(@$nearbyGenes) - 1;
-#my ($iThis) = grep $nearbyGenes->[$_]{locusTag} eq $gene->{locusTag}, (0..$iMax);
-#die "gene is not near itself" unless defined $iThis;
-#my $i1 = max(0, $iThis-5);
-#my $i2 = min($iThis+5, $iMax);
-#print h3("Nearby Genes");
-#for my $i ($i1..$i2) {
-#  my $nearbyGene = $nearbyGenes->[$i];
-#  my $nlt = $nearbyGene->{locusTag};
-#  print p(a({-href => "gene.cgi?locus=$nlt"}, $nlt), $nearbyGene->{strand}, encode_entities($nearbyGene->{desc}));
-#}
 
 if (defined $seq) {
   print

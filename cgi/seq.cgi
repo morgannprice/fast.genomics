@@ -9,17 +9,20 @@ use neighbor;
 use lib "../../PaperBLAST/lib";
 use neighborWeb;
 
-# CGI arguments:
+# required CGI arguments:
 # locus (a locus tag in the database) or seqDesc and seq
+# optional arguments:
+# order (which subdb to use)
 #
 # Forwards to the gene page if locus is set
 
 my $cgi = CGI->new;
+setOrder(param('order'));
 my ($gene, $seqDesc, $seq) = getGeneSeqDesc($cgi);
 
 if (defined $gene) {
   # should not be reachable, but redirect to gene page just in case
-  print redirect(-url => "gene.cgi?locus=$gene->{locusTag}");
+  print redirect(-url => addOrderToURL("gene.cgi?locus=$gene->{locusTag}"));
   exit(0);
 }
 
@@ -31,7 +34,7 @@ h3("Protein sequence"),
     formatFastaHtml($seqDesc, $seq);
 
 my $options = geneSeqDescSeqOptions($gene, $seqDesc, $seq);
-if (hasMMSeqsHits($seq)) {
+if (hasHits($seq)) {
   print p("See",
           join(", or ",
                a({-href => "neighbors.cgi?$options"}, "gene neighborhoods"),

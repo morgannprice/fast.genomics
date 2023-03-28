@@ -13,11 +13,13 @@ use lib "../../PaperBLAST/lib";
 use neighborWeb;
 use pbweb qw{commify};
 
-# CGI arguments:
-# query (optional) -- usually an identifier or locus tag,
+# optional CGI arguments:
+# query -- usually an identifier or locus tag,
 #   or a genus and word(s) from a protein description.
 #   See neighborWeb::parseGeneQuery for details.
+# order (which subdb to use)
 my $cgi = CGI->new;
+setOrder(param('order'));
 my $query = $cgi->param('query') || "";
 
 # Redirect to locus tag if the query is an exact match to a
@@ -30,7 +32,7 @@ if (! $geneRedirect && $query =~ m/^[a-zA-Z0-9_.]+$/) {
   $geneRedirect = $genesFromProteinId->[0] if @$genesFromProteinId == 1;
 }
 if ($geneRedirect) {
-  print redirect(-url => "gene.cgi?locus=" . $geneRedirect->{locusTag});
+  print redirect(-url => addOrderToURL("gene.cgi?locus=" . $geneRedirect->{locusTag}));
   exit(0);
 }
 
@@ -44,17 +46,22 @@ if (!defined $query{genes} && !defined $query{seq}) {
                   "P0A884",
                   "3osdA",
                   "Escherichia thymidylate synthase");
+  pop @examples if getOrder() ne "";
   my @exampleLabels = ("by locus tag", "by UniProt accession or name",
                        "by Protein Data Bank entry", "by genus and description");
   my @exampleLinks = ();
   for (my $i = 0; $i < scalar(@examples); $i++) {
-    push @exampleLinks, a({ -href => "search.cgi?query=" . uri_escape($examples[$i]),
+    push @exampleLinks, a({ -href => addOrderToURL("search.cgi?query=" . uri_escape($examples[$i])),
                             -style => "text-decoration: none;",
                             -title => $exampleLabels[$i] },
                           $examples[$i]);
   }
+  my $instructions = getOrder eq "" ?
+    "Enter an identifier, a protein sequence, or a genus name and a protein description"
+      : "Enter an identifier or a protein sequence";
   print start_form( -name => 'input', -method => 'GET', -action => 'search.cgi' ),
-    p(b("Enter an identifier, a protein sequence, or a genus name and a protein description"),
+    orderToHidden(),
+    p(b($instructions),
       br(),
       span({-style => "margin-left: 20pt; font-size: 90%;"},
            "examples:", join(", ", @exampleLinks)),
@@ -65,6 +72,7 @@ if (!defined $query{genes} && !defined $query{seq}) {
     end_form;
 
   print p(start_form(-name => 'input', -method => 'GET', -action => 'findTaxon.cgi'),
+          orderToHidden(),
           "Or search for a taxon:",
         qq{<INPUT name='query' type='text' size=20 maxlength=1000 />},
         submit('Taxon search'),
@@ -72,10 +80,11 @@ if (!defined $query{genes} && !defined $query{seq}) {
         span({-style => "font-size:smaller;"}, "use % for wild cards"),
         end_form);
 
-  my ($nGenomes) = getDbHandle()->selectrow_array("SELECT COUNT(*) FROM Genome");
+  my ($nGenomes) = getTopDbHandle()->selectrow_array("SELECT COUNT(*) FROM Genome");
   $nGenomes = commify($nGenomes);
-  my $domains = getDbHandle()->selectcol_arrayref("SELECT taxon FROM Taxon WHERE level = ?", {}, "domain");
-  my $domainsString = join(" and ", map a({-href => "taxon.cgi?level=domain&taxon=$_"}, $_), @$domains);
+  my $domains = getTopDbHandle()->selectcol_arrayref("SELECT taxon FROM Taxon WHERE level = ?", {}, "domain");
+  my $domainsString = join(" and ",
+    map a({-href => addOrderToURL("taxon.cgi?level=domain&taxon=$_")}, $_), @$domains);
 
   print <<END
 <H3>About <i>fast.genomics</i></H3>
@@ -112,18 +121,49 @@ The protein of interest need not be in fast.genomics' database.
 <P style="font-size:90%;">(These examples are for a putative 3-ketoglycoside hydrolase, ING2E5A_RS06865. This family of proteins was formerly known as DUF1080.)</P>
 END
     ;
-  my ($nPhyla) = getDbHandle()->selectrow_array("SELECT COUNT(DISTINCT gtdbPhylum) FROM Genome");
+
+  if (getOrder() eq "") {
+    print <<END
+<H3>A database for each order</H3>
+
+<P><i>Fast.genomics</i> also includes a database for each order, with every species represented, and up to 10 genomes per species. You can reach the per-order database from the taxon or genome pages.
+END
+;
+  } else {
+    my $order = getOrder();
+    my ($nSubGenomes) = getDbHandle()->selectrow_array("SELECT COUNT(*) FROM Genome");
+    $nSubGenomes = commify($nSubGenomes);
+    my ($nSubProteins, $nSubClusters) = getDbHandle()->selectrow_array(
+      qq{SELECT nProteins, nClusters FROM ClusteringInfo});
+    $nSubProteins = commify($nSubProteins);
+    $nSubClusters = commify($nSubClusters);
+    print <<END
+<H3>A database of $order</H3>
+
+<P><i>Fast.genomics</i> also has database for each order, including a
+database with $nSubGenomes genomes of $order and $nSubProteins proteins. Up to 10 genomes of each
+species are included. To speed up searches for homologs,
+<i>fast.genomics</i> uses a pre-computed clustering (from
+<A HREF="https://github.com/weizhongli/cdhit/wiki">CD-HIT</A>) of all of the proteins in $order.
+First, <i>fast.genomics</i> searches against $nSubClusters clusters (using protein BLAST and E &le; 1);
+then it compares the query to all members of those clusters (using protein BLAST and E &le; 0.001).
+
+END
+;
+  }
+  my ($nPhyla) = getTopDbHandle()->selectrow_array("SELECT COUNT(DISTINCT gtdbPhylum) FROM Genome");
   $nPhyla = commify($nPhyla);
-  my ($nClasses) = getDbHandle()->selectrow_array("SELECT COUNT(DISTINCT gtdbClass) FROM Genome");
+  my ($nClasses) = getTopDbHandle()->selectrow_array("SELECT COUNT(DISTINCT gtdbClass) FROM Genome");
   $nClasses = commify($nClasses);
-  my ($nOrders) = getDbHandle()->selectrow_array("SELECT COUNT(DISTINCT gtdbOrder) FROM Genome");
+  my ($nOrders) = getTopDbHandle()->selectrow_array("SELECT COUNT(DISTINCT gtdbOrder) FROM Genome");
   $nOrders = commify($nOrders);
-  my ($nFamilies) = getDbHandle()->selectrow_array("SELECT COUNT(DISTINCT gtdbFamily) FROM Genome");
+  my ($nFamilies) = getTopDbHandle()->selectrow_array("SELECT COUNT(DISTINCT gtdbFamily) FROM Genome");
   $nFamilies = commify($nFamilies);
   my $dbDate = `date -r ../data/neighbor.db '+%b %-d, %Y'`;
   chomp $dbDate;
+
   print <<END
-<H3>Statistics</H3>
+<H3>Statistics for the main database of diverse Bacteria and Archaea</H3>
 
 <TABLE cellpadding=2 cellspacing=2>
 <TR style="background-color: lightgrey;"><TD>Phyla</TD><TD align="right">$nPhyla</TD>
@@ -151,7 +191,7 @@ END
 </TABLE>
 
 
-<H3>Downloads</H3>
+<H3>Downloads for the main database</H3>
 
 <UL>
 <LI><A HREF="downloadGenomes.cgi">Genomes</A> (tab-delimited)
@@ -161,8 +201,22 @@ END
 </UL>
 END
     ;
+
+  if (getOrder() ne "") {
+    my $order = getOrder();
+    my $subDb = getSubDb();
+    print <<END
+<H3>Downloads for $order</H3>
+<UL>
+<LI><A HREF="downloadGenomes.cgi?order=$order">Genomes</A> (tab-delimited)
+<LI><A HREF="../data/$subDb/sub.faa.gz">Protein sequences</A> (fasta format, gzipped)
+<LI><A HREF="../data/$subDb/sub.db">SQLite3 database</A> (see <A HREF="../lib/neighbor.sql">schema</A>)
+</UL>
+END
+;
+  }
   finish_page();
-}
+} # end no query
 
 if (defined $query{genes}) {
   my $genes = $query{genes};
@@ -174,13 +228,14 @@ if (defined $query{genes}) {
     my $genome = gidToGenome($gid) || die $gid;
     die $gid unless $genome;
     print p("Found", scalar(@$genes), "matches in",
-            a({-href => "genome.cgi?gid=".$genome->{gid}, -style => "text-decoration:none;" },
+            a({-href => addOrderToURL("genome.cgi?gid=".$genome->{gid}),
+               -style => "text-decoration:none;" },
               i($genome->{gtdbSpecies}), $genome->{strain}),
             a({-href => "https://www.ncbi.nlm.nih.gov/assembly/".$genome->{gid}, -style => "text-decoration:none;"},
               "($genome->{gid})"));
     foreach my $gene (@$genes) {
       my $locusTag = $gene->{locusTag};
-      print p(a({href => "gene.cgi?locus=$locusTag"}, $locusTag),
+      print p(a({href => addOrderToURL("gene.cgi?locus=$locusTag")}, $locusTag),
               $gene->{proteinId}, $gene->{desc});
     }
     my $query2 = $query; $query2 =~ s/^\S+\s+//; $query2 =~ s/\s+$//;
@@ -194,7 +249,7 @@ if (defined $query{genes}) {
     foreach my $gene (@$genes) {
       my $locusTag = $gene->{locusTag};
       my $genome = gidToGenome($gene->{gid}) || die $gid;
-      print p(a({href => "gene.cgi?locus=$locusTag"}, $locusTag),
+      print p(a({href => addOrderToURL("gene.cgi?locus=$locusTag")}, $locusTag),
               $gene->{proteinId}, $gene->{desc},
               "from", i($genome->{gtdbSpecies}), $genome->{strain}, small("(".$genome->{gid}.")"));
     }
@@ -214,21 +269,22 @@ print p("Sequence name:", encode_entities($seqDesc));
 print showSequence($seqDesc, $seq);
 
 my $seqDescE = uri_escape($seqDesc);
-if (hasMMSeqsHits($seq)) {
+if (hasHits($seq)) {
   print p("See",
           join(", or ",
-               a({-href => "neighbors.cgi?seqDesc=${seqDescE}&seq=${seq}"},
+               a({-href => addOrderToURL("neighbors.cgi?seqDesc=${seqDescE}&seq=${seq}")},
                  "gene neighborhoods"),
-               a({-href => "hitTaxa.cgi?seqDesc=${seqDescE}&seq=${seq}"},
+               a({-href => addOrderToURL("hitTaxa.cgi?seqDesc=${seqDescE}&seq=${seq}")},
                  "taxonomic distribution"),
-               a({-href => "downloadHomologs.cgi?seqDesc=${seqDescE}&seq=${seq}",
+               a({-href => addOrderToURL("downloadHomologs.cgi?seqDesc=${seqDescE}&seq=${seq}"),
                   -title => "tab-delimited table of homologs"},
                  "download homologs"),
-               a({-href => "compare.cgi?seqDesc=${seqDescE}&seq=${seq}",
+               a({-href => addOrderToURL("compare.cgi?seqDesc=${seqDescE}&seq=${seq}"),
                   -title => "compare presence/absence of homologs and their proximity"},
                  "compare presence/absence")));
 } else {
-  print p(a({-href => "findHomologs.cgi?seqDesc=$seqDescE&seq=${seq}"}, "Find homologs with mmseqs2"),
+  print p(a({-href => addOrderToURL("findHomologs.cgi?seqDesc=$seqDescE&seq=${seq}")},
+            getOrder() eq "" ? "Find homologs with mmseqs2" : "Find homologs with clustered BLAST"),
           "(fast)");
 }
 print

@@ -13,32 +13,48 @@ use lib "../../PaperBLAST/lib";
 use neighborWeb;
 use pbweb qw{commify};
 
-# CGI arguments:
+# required CGI arguments:
 # locus (a locus tag in the database) or seqDesc and seq
-# taxLevel -- defaults to phylum
+# optional CGI arguments:
+# order (which subdb to use)
+# taxLevel -- defaults to phylum, for top-level db, or family otherwise
 # Good -- set if show results for good hits only
 # all -- set to all if show results for all taxa, sorted by taxonomy, instead of sorting by frequency
 
 my $cgi = CGI->new;
+setOrder(param('order'));
 my ($gene, $seqDesc, $seq) = getGeneSeqDesc($cgi);
-my $taxLevel = $cgi->param('taxLevel') || 'phylum';
+my $taxLevel = $cgi->param('taxLevel')
+  || (getOrder() eq "" ? "phylum" : "family");
 die "Unknown taxLevel"
   unless $taxLevel eq "phylum"
   || $taxLevel eq "class"
   || $taxLevel eq "order"
-  || $taxLevel eq "family";
+  || $taxLevel eq "family"
+  || $taxLevel eq "genus"
+  || $taxLevel eq "species";
+my @levelsAllowed = taxLevels();
+shift @levelsAllowed; # don't allow the top level (domain or order)
+if (getOrder eq "") {
+  # no genus or species
+  pop @levelsAllowed;
+  pop @levelsAllowed;
+}
+my %levelsAllowed = map { $_ => 1 } @levelsAllowed;
+die "Invalid taxLevel $taxLevel\n" unless exists $levelsAllowed{$taxLevel};
+
 my $showGood = $cgi->param('Good') ? 1 : "";
 my $all = $cgi->param('all') || "freq";
 die "Invalid all" unless $all eq "all" || $all eq "freq";
 
 if (defined $gene && ! $seq) {
   # should not be reachable, but redirect to gene page just in case
-  print redirect(-url => "gene.cgi?locus=$gene->{locusTag}");
+  print redirect(-url => addOrderToURL("gene.cgi?locus=$gene->{locusTag}"));
   exit(0);
 }
 die unless $seq;
 
-unless (hasMMSeqsHits($seq)) {
+unless (hasHits($seq)) {
   print redirect(-url => "findHomologs.cgi?" . geneSeqDescSeqOptions($gene,$seqDesc,$seq));
   exit(0);
 }
@@ -52,7 +68,7 @@ if ($gene) {
 start_page('title' => $title);
 autoflush STDOUT 1; # show preliminary results
 
-my $hits = getMMSeqsHits($seq);
+my $hits = getHits($seq);
 if (scalar(@$hits) == 0) {
   print p("Sorry, no homologs were found for this sequence");
   finish_page;
@@ -70,11 +86,12 @@ $geneHits = \@goodHits if $showGood;
 print p("Showing the distribution of",
         $showGood ? "good" : "all",
         "hits at the level of", $taxLevel), "\n";
+
 print
   start_form( -name => 'input', -method => 'GET', -action => 'hitTaxa.cgi' ),
   geneSeqDescSeqHidden($gene, $seqDesc, $seq),
   p("Level:",
-    popup_menu(-name => 'taxLevel', -values => [ qw(phylum class order family) ], -default => $taxLevel),
+    popup_menu(-name => 'taxLevel', -values => \@levelsAllowed, -default => $taxLevel),
     "&nbsp;",
     checkbox(-name => 'Good', -checked => $showGood),
     "homologs only?",
@@ -102,16 +119,15 @@ push @links, a({-href => "compare.cgi?$options",
                -title => "compare presence/absence of homologs and their proximity"}, "compare presence/absence");
 print p("Or see", join(", or ", @links));
 
-my @levelsShow = ("Domain", "Phylum");
-unless ($taxLevel eq "phylum") {
-  push @levelsShow, "Class";
-  unless ($taxLevel eq "class") {
-    push @levelsShow, "Order";
-    unless ($taxLevel eq "order") {
-      push @levelsShow, "Family";
-    }
-  }
-}
+# Which taxon levels to include in the analysis
+my @levels = taxLevels(); # all the ones in the db
+# Remove levels after $taxLevel
+my ($iLevelAt) = grep $levels[$_] eq $taxLevel, (0..(scalar(@levels)-1));
+splice @levels, $iLevelAt + 1;
+# Remove order if subdb (the order is always the same)
+shift @levels if getOrder() ne "" && $levels[0] eq "order";
+my @levelsShow = map capitalize($_), @levels;
+
 
 # taxString is each taxon in this list of levels, joined by ";;;"
 
@@ -147,7 +163,6 @@ if ($all eq "freq") {
 } else {
   # all mode
   my $taxa = getTaxa();
-  my @levels = map lc, @levelsShow;
   foreach my $tax (values %{ $taxa->{$taxLevel} }) {
     my $levels = taxToParts($tax, $taxa);
     my $taxString = join(";;;", map $levels->{$_}, @levels);
@@ -168,7 +183,7 @@ if ($all eq "freq") {
 }
 
 my @header = @levelsShow;
-$header[0] = "&nbsp;";
+$header[0] = "&nbsp;" if $levels[0] eq "domain";
 push @header, ("#Genomes", "# with hits", "#Hits",
                a({-title => "Bit score ratio for the best homolog from this group of genomes"},
                  "Max ratio"));
@@ -179,12 +194,15 @@ my $maxRows;
 $maxRows = 200 if $all eq "freq";
 foreach my $row (@rows) {
   my @out = split /;;;/, $row->{taxString};
-  $out[0] = domainHtml($out[0]);
-  for (my $i = 1; $i < scalar(@levelsShow); $i++) {
-    my $levelThis = lc($levelsShow[$i]);
-    $out[$i] = a({ -style => "text-decoration: none;",
-                   -href => "taxon.cgi?level=$levelThis&taxon=".uri_escape($out[$i]) },
-                 encode_entities($out[$i]));
+  for (my $i = 0; $i < scalar(@levels); $i++) {
+    my $levelThis = $levels[$i];
+    if ($levelThis eq "domain") {
+      $out[$i] = domainHtml($out[$i]);
+    } else {
+      $out[$i] = a({ -style => "text-decoration: none;",
+                     -href => addOrderToURL("taxon.cgi?level=$levelThis&taxon=".uri_escape($out[$i])) },
+                   encode_entities($out[$i]));
+    }
   }
   my $showNHits = commify($row->{nHits});
   my $showRatio = "&nbsp;";
@@ -201,7 +219,7 @@ foreach my $row (@rows) {
       $truncate = 1;
       splice @tHits, $maxShow;
     }
-    my $URL = "genes.cgi?" . join("&", map "g=" . $_->{locusTag}, @tHits);
+    my $URL = addOrderToURL("genes.cgi?" . join("&", map "g=" . $_->{locusTag}, @tHits));
     my $goodString = $showGood ? "good" : "all";
     my $truncateString = $truncate ? " top $maxShow" : "";
     $showNHits = a({ -href => $URL,

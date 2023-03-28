@@ -9,12 +9,14 @@ use lib "../lib";
 use lib "../../PaperBLAST/lib";
 use neighborWeb;
 
-# CGI arguments: none
+# CGI arguments: order (optional)
+setOrder(param('order'));
 
 my $genomes = getDbHandle()->selectall_arrayref("SELECT * from Genome"
   . " ORDER BY gtdbDomain, gtdbPhylum, gtdbClass, gtdbOrder, gtdbFamily, gtdbGenus, gtdbSpecies, strain",
   { Slice => {} });
 my $fileName = "genomes.tsv";
+$fileName = getSubDb() . "_" . $fileName if getOrder() ne "";
 print "Content-Type:text/tab-separated-values\n";
 print "Content-Disposition: attachment; filename=$fileName\n\n";
 my @fields = qw{assemblyId gtdbDomain gtdbPhylum gtdbClass gtdbOrder gtdbFamily gtdbGenus gtdbSpecies strain gtdbAccession assemblyName ncbiTaxonomy nGenes nProteins};

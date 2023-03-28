@@ -13,9 +13,13 @@ use lib "../../PaperBLAST/lib";
 use pbweb qw{commify};
 use neighborWeb;
 
-# CGI arguments:
-# locus (a locus tag in the database) or seqDesc and seq
+# Required CGI arguments:
+# locus (a locus tag in the database), or seqDesc and seq
+# Optional arguments:
+# order (which subdb to use)
+
 my $cgi = CGI->new;
+setOrder(param('order'));
 my ($gene, $seqDesc, $seq) = getGeneSeqDesc($cgi);
 
 start_page('title' => 'Find homologs');
@@ -24,7 +28,7 @@ autoflush STDOUT 1; # show preliminary results
 if (defined $gene && !defined $seq) {
   # This shouldn't be reached, but just in case
   print p("Not a protein-coding gene:", encode_entities($seqDesc)),
-    p(a({ -href => "gene.cgi?locus=".$gene->{locusTag} }, "see gene"));
+    p(a({ -href => addOrderToURL("gene.cgi?locus=".$gene->{locusTag}) }, "see gene"));
   finish_page();
 }
 #else
@@ -33,7 +37,7 @@ die "No sequence input\n" unless defined $seq && $seq =~ m/^[A-Z]+$/;
 print p("Finding homologs for", encode_entities($seqDesc)),
   showSequence($seqDesc, $seq),
   "\n";
-my $hits = getMMSeqsHits(uc($seq));
+my $hits = getHits(uc($seq));
 my $hitGenes = hitsToGenes($hits);
 
 my $maxScore = 0;
@@ -54,14 +58,14 @@ my $options = defined $gene ? "locus=".$gene->{locusTag}
   : "seqDesc=" . encode_entities($seqDesc) . "&" . "seq=$seq";
 print p("See",
         join(", or ",
-             a({-href => "neighbors.cgi?${options}"}, "gene neighborhoods"),
-             a({-href => "hitTaxa.cgi?${options}"}, "taxonomic distribution")
+             a({-href => addOrderToURL("neighbors.cgi?${options}")}, "gene neighborhoods"),
+             a({-href => addOrderToURL("hitTaxa.cgi?${options}")}, "taxonomic distribution")
              . " of homologs",
-             a({-href => "downloadHomologs.cgi?${options}",
-                -title => "tab-delimited table of homologs"}, "download"),
-             a({-href => "compare.cgi?${options}"}, "compare presence/absence")))
+             a({-href => addOrderToURL("downloadHomologs.cgi?${options}"),
+                -title => "tab-delimited table of homologs"}, "download homologs"),
+             a({-href => addOrderToURL("compare.cgi?${options}")}, "compare presence/absence")))
   if @$hitGenes > 0;
-print p("Or see", a({-href => "gene.cgi?locus=$gene->{locusTag}"}, "gene"))
+print p("Or see", a({-href => addOrderToURL("gene.cgi?locus=$gene->{locusTag}")}, "gene"))
   if defined $gene;
 
 print

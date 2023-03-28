@@ -17,6 +17,7 @@ use neighborWeb;
 # locus2, or, seq2 and seqDesc2
 
 my $cgi = CGI->new;
+setOrder(param('order'));
 my ($gene, $seqDesc, $seq) = getGeneSeqDesc($cgi);
 my $options = geneSeqDescSeqOptions($gene,$seqDesc,$seq); # for 1st gene
 
@@ -73,7 +74,7 @@ if ($gene2) {
 
 print h3("Blast comparison");
 # Compare the two proteins by running bl2seq
-my $bl2seq = "$RealBin/../bin/bl2seq";
+my $bl2seq = "$RealBin/../bin/blast/bl2seq";
 die "No such executable: $bl2seq" unless -x $bl2seq;
 # Sanitize identifiers for bl2seq
 $seqDesc =~ s/[^a-zA-Z0-9._'" -]/./g;
@@ -89,12 +90,13 @@ print $fh2 ">", $seqDesc2, "\n", $seq2, "\n";
 close ($fh2) || die "Error writing to $tmp2";
 
 print "\n<pre>\n";
-my $cmd = "$bl2seq -p blastp -i $tmp1 -j $tmp2 -e 1e-5";
+my $cmd = "$bl2seq -p blastp -i $tmp1 -j $tmp2 -e 1e-5 '-F m S'";
 system($cmd) == 0
   || die "bl2seq failed -- $!\nCommand; $cmd\n";
 unlink($tmp1);
 unlink($tmp2);
 print "</pre>\n";
 print p({-style => "font-size: 90%;"},
-        "BLAST bit scores are not exactly the same as the bit scores from mmseqs2, which are shown on other pages on this site. And e-values on this page will be much lower because the database is just one protein.");
+        getOrder() eq "" ? "BLAST bit scores are not exactly the same as the bit scores from mmseqs2, which are shown on other pages of this site." : "",
+        "E-values on this page will be much lower than on other pages because it is comparing to just one protein instead of a large database.");
 finish_page();

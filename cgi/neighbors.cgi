@@ -18,10 +18,10 @@ use pbweb qw{commify};
 use MOTree; # from PaperBLAST/lib/
 
 # Required CGI arguments:
-# locus (a locus tag in the database)
-# or seqDesc and seq
+# locus (a locus tag in the database) or seqDesc and seq
 #
 # Optional arguments:
+# order (which subdb to use)
 # n -- max number of hits to show
 # kb -- how many kilobases to show
 # hitType -- top, random, or randomAny; top means show top hits and is the default;
@@ -30,6 +30,7 @@ use MOTree; # from PaperBLAST/lib/
 #     or tsv (tab-delimited table of all genes shown)
 # tree -- set to build a tree (if needed) and render it
 my $cgi = CGI->new;
+setOrder(param('order'));
 my ($gene, $seqDesc, $seq) = getGeneSeqDesc($cgi);
 my $n = $cgi->param('n');
 $n = 50 unless defined $n && $n =~ m/^\d+$/;
@@ -44,7 +45,7 @@ my $showTree = $cgi->param('tree') || 0;
 
 if (defined $gene && ! $seq) {
   # should not be reachable, but redirect to gene page just in case
-  print redirect(-url => "gene.cgi?locus=$gene->{locusTag}");
+  print redirect(-url => addOrderToURL("gene.cgi?locus=$gene->{locusTag}"));
   exit(0);
 }
 die unless $seq;
@@ -55,14 +56,14 @@ if (defined $gene) {
   $genome = gidToGenome($gene->{gid}) || die;
 }
 
-unless (hasMMSeqsHits($seq)) {
+unless (hasHits($seq)) {
   print redirect(-url => "findHomologs.cgi?" . geneSeqDescSeqOptions($gene, $seqDesc, $seq));
   exit(0);
 }
 
 my $format = $cgi->param('format') || "";
 $format = "" unless $format eq "fasta" || $format eq "tsv" || $format eq "newick";
-$format = "" unless hasMMSeqsHits($seq);
+$format = "" unless hasHits($seq);
 
 if ($format eq "") {
   my $title = 'Gene neighborhoods';
@@ -102,7 +103,7 @@ if ($format eq "") {
 }
 
 if (defined $gene) {
-  print p(a({-href => "gene.cgi?locus=$locusTag"}, "$locusTag"),
+  print p(a({-href => addOrderToURL("gene.cgi?locus=$locusTag")}, "$locusTag"),
           "from",
           a({ -href => "genome.cgi?gid=$genome->{gid}" },
               i(encode_entities($genome->{gtdbSpecies})),
@@ -113,7 +114,7 @@ if (defined $gene) {
 }
 print "\n" if $format eq "";
 
-my $hits = getMMSeqsHits($seq);
+my $hits = getHits($seq);
 if (scalar(@$hits) == 0) {
   if ($format eq "") {
     print p("Sorry, no homologs were found for this sequence");
@@ -182,7 +183,7 @@ if ($format eq "") {
 
   my @links = ();
   if (defined $gene) {
-    push @links, a({-href => "gene.cgi?$options"}, "gene");
+    push @links, a({-href => addOrderToURL("gene.cgi?$options")}, "gene");
   } else {
     push @links, a({-href => "seq.cgi?$options"}, "sequence");
   }
@@ -377,7 +378,7 @@ die unless $format eq "";
 
 foreach my $hit (@$geneHits) {
   my $hitGenome = gidToGenome($hit->{gid}) || die;
-  my $genomeURL = encode_entities("genome.cgi?gid=$hit->{gid}");
+  my $genomeURL = encode_entities(addOrderToURL("genome.cgi?gid=$hit->{gid}"));
   $yAt += 25; # make space for genome label
   my $identity = int(100 * $hit->{identity} + 0.5);
   my $qShow = $locusTag || "query";
@@ -391,7 +392,7 @@ foreach my $hit (@$geneHits) {
   my @lineage = ();
   foreach my $level (qw{phylum class order family}) {
     my $taxon = $hitGenome->{"gtdb" . capitalize($level)};
-    my $taxonURL = encode_entities("taxon.cgi?level=$level&taxon=".uri_escape($taxon));
+    my $taxonURL = encode_entities(addOrderToURL("taxon.cgi?level=$level&taxon=".uri_escape($taxon)));
     push @lineage, qq[<a xlink:href=$taxonURL><tspan font-size="75%">$taxon</tspan></a>];
   }
   my $xDomain = $genesLeft + 150;
@@ -414,7 +415,7 @@ foreach my $hit (@$geneHits) {
   my $showEnd = $mid + $ntShown/2;
   foreach my $s (@{ $hit->{showGenes} }) {
     $s->{label} = $s->{locusTag};
-    $s->{URL} = "gene.cgi?locus=" . $s->{locusTag};
+    $s->{URL} = addOrderToURL("gene.cgi?locus=" . $s->{locusTag});
     $s->{color} = $locusTagToColor{$s->{locusTag}} || "lightgrey";
     if ($s->{locusTag} eq $hit->{locusTag}
         && ! (defined $gene && $gene->{locusTag} eq $hit->{locusTag})) {
@@ -487,7 +488,7 @@ if ($tree) {
       my $hitGenome = gidToGenome($hit->{gid}) || die;
       $nodeTitle{$node} = encode_entities(join(" ", $hit->{locusTag}, "from",
                                                $hitGenome->{gtdbSpecies}, $hitGenome->{strain}));
-      $nodeURL{$node} = "gene.cgi?locus=" . $hit->{locusTag};
+      $nodeURL{$node} = addOrderToURL("gene.cgi?locus=" . $hit->{locusTag});
       $nodeRadius{$node} = 4;
     } else {
       my $id = $tree->id($node);

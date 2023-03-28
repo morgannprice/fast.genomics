@@ -22,6 +22,7 @@ use pbweb qw{commify};
 # required CGI arguments:
 # locus (a locus tag in the database) or seqDesc and seq
 # optional CGI arguments:
+# order -- which subdb to use
 # query2, locus2, or seq2 and seqDesc2 (to specify the 2nd locus)
 # format -- use tsv to download a table
 # For taxon mode:
@@ -35,6 +36,7 @@ my $closeKb = 5;
 my $closeNt = $closeKb * 1000;
 
 my $cgi = CGI->new;
+setOrder(param('order'));
 my $tsv = ($cgi->param('format') || "") eq  'tsv';
 my ($gene, $seqDesc, $seq) = getGeneSeqDesc($cgi);
 my $options = geneSeqDescSeqOptions($gene,$seqDesc,$seq); # for 1st gene
@@ -55,7 +57,7 @@ unless ($tsv) {
 if ($tsv) {
   die "first gene is not protein-coding\n"
     unless defined $seq;
- die "No homologs for first gene yet\n" unless hasMMSeqsHits($seq);
+ die "No homologs for first gene yet\n" unless hasHits($seq);
 }
 else {
   print h3("First protein");
@@ -65,7 +67,8 @@ else {
             encode_entities($gene->{desc}),
             br(),
             "from",
-            a({-href => "genome.cgi?gid=$genome->{gid}", -style => "text-decoration:none;"},
+            a({-href => addOrderToURL("genome.cgi?gid=$genome->{gid}"),
+               -style => "text-decoration:none;"},
               i($genome->{gtdbSpecies}), encode_entities($genome->{strain})));
   } else {
     print p(a({-href => "seq.cgi?$options"}, encode_entities($seqDesc)));
@@ -74,13 +77,13 @@ else {
     print p("Sorry, first gene is not protein-coding");
     finish_page();
   }
-  unless (hasMMSeqsHits($seq)) {
+  unless (hasHits($seq)) {
     print p("Sorry, first protein does not have homologs yet");
     print a({-href => "findHomologs.cgi?$options"}, "Find homologs for the first protein");
     finish_page();
   }
 }
-my $hits1 = getMMSeqsHits($seq);
+my $hits1 = getHits($seq);
 if (scalar(@$hits1) == 0) {
   exit(0) if $tsv;
   print p("Sorry, no homologs were found for the first protein");
@@ -126,7 +129,7 @@ if (defined $locus2 && $locus2 ne "") {
   if (defined $query2{genes}) {
     my $genes = $query2{genes};
     if (scalar(@$genes) > 1) {
-      my $URL = "genes.cgi?" . join("&", map "g=" . $_->{locusTag}, @$genes);
+      my $URL = addOrderToURL("genes.cgi?" . join("&", map "g=" . $_->{locusTag}, @$genes));
       print
         p("Sorry, more than one gene matched", encode_entities($query2)),
         p("See", a{-href => $URL}, "table");
@@ -158,7 +161,8 @@ if ($tsv) {
             encode_entities($gene2->{desc}),
             br(),
             "from",
-            a({-href => "genome.cgi?gid=".$genome->{gid}, -style => "text-decoration: none;"},
+            a({-href => addOrderToURL("genome.cgi?gid=".$genome->{gid}),
+               -style => "text-decoration: none;"},
               i($genome->{gtdbSpecies}), encode_entities($genome->{strain})));
   } else {
     print p(a({-href => "seq.cgi?$options2"}, encode_entities($seqDesc2)));
@@ -168,13 +172,13 @@ if ($tsv) {
     finish_page();
   }
 }
-unless (hasMMSeqsHits($seq2)) {
+unless (hasHits($seq2)) {
   die "No homologs for second protein yet\n" if $tsv;
   print p("Sorry, second protein does not have homologs yet");
   print a({-href => "findHomologs.cgi?$options2"}, "Find homologs for the second protein");
   finish_page();
 }
-my $hits2 = getMMSeqsHits($seq2);
+my $hits2 = getHits($seq2);
 if (scalar(@$hits2) == 0) {
   exit(0) if $tsv;
   print p("Sorry, no homologs were found for the second protein");
@@ -205,8 +209,25 @@ print p("Loaded", commify(scalar(@$geneHits1)), "homologs for the first protein"
 
 if ($taxLevel) { # taxon distribution mode
   die "Cannot set tsv with taxLevel" if $tsv;
-  die "Invalid taxLevel"
-    unless $taxLevel eq "phylum" || $taxLevel eq "class" || $taxLevel eq "order" || $taxLevel eq "family";
+  my @levelsAllowed = taxLevels();
+  shift @levelsAllowed; # don't allow the top level (domain or order)
+  if (getOrder() eq "") {
+    # no genus or species
+    pop @levelsAllowed;
+    pop @levelsAllowed;
+  }
+  my %levelsAllowed = map { $_ => 1 } @levelsAllowed;
+  die "Invalid taxLevel $taxLevel\n" unless exists $levelsAllowed{$taxLevel};
+
+  # Which taxon levels to include in the analysis
+  my @levels = taxLevels(); # all the ones in the db
+  # Remove levels after $taxLevel
+  my ($iLevelAt) = grep $levels[$_] eq $taxLevel, (0..(scalar(@levels)-1));
+  splice @levels, $iLevelAt + 1;
+  # Remove order if subdb (the order is always the same)
+  shift @levels if getOrder() ne "" && $levels[0] eq "order";
+  my @levelsShow = map capitalize($_), @levels;
+
   die "Invalid taxMode" unless $taxMode eq "both" || $taxMode eq "close";
   my $goodOnly = $cgi->param('Good') || 0;
   my $all = $cgi->param('all') || "freq";
@@ -235,20 +256,26 @@ if ($taxLevel) { # taxon distribution mode
   } else { # keep genome only if there's a close pair
     foreach my $gid (keys %byg1) {
       next unless exists $byg2{$gid};
-      my %seen = (); # locusTag => 1 if already listed as a gene
+      # Keep the two seen lists separate to ensure that byg2 is non-empty whenever
+      # byg1 is added to. This was causing a bug before I added the check that
+      # hit1 and hit2 have different locusTag; with that check, I'm not sure
+      # if the two seen lists could actually overlap, but maybe it is possible.
+      my %seen1 = (); # locusTag => 1 if already listed in byg1
+      my %seen2 = (); # locusTag => 1 if already listed in byg2
       my $list1 = $byg1{$gid};
       my $list2 = $byg2{$gid};
       my $keep = 0;
       foreach my $hit1 (@$list1) {
         foreach my $hit2 (@$list2) {
           if ($hit1->{scaffoldId} eq $hit2->{scaffoldId}
+              && $hit1->{locusTag} ne $hit2->{locusTag}
               && $hit1->{strand} eq $hit2->{strand}
               && (abs($hit1->{begin} - $hit2->{end}) <= $closeNt
                   || abs($hit1->{end} - $hit2->{begin}) <= $closeNt)) {
-            push @{ $gid1{$gid} }, $hit1 unless exists $seen{ $hit1->{locusTag} };
-            $seen{ $hit1->{locusTag} } = 1;
-            push @{ $gid2{$gid} }, $hit2 unless exists $seen{ $hit2->{locusTag} };
-            $seen{ $hit2->{locusTag} } = 1;
+            push @{ $gid1{$gid} }, $hit1 unless exists $seen1{ $hit1->{locusTag} };
+            $seen1{ $hit1->{locusTag} } = 1;
+            push @{ $gid2{$gid} }, $hit2 unless exists $seen2{ $hit2->{locusTag} };
+            $seen2{ $hit2->{locusTag} } = 1;
             $keep = 1;
             last;
           }
@@ -263,7 +290,7 @@ if ($taxLevel) { # taxon distribution mode
     if $goodOnly;
   my $whatString = "for both genes";
   $whatString = "nearby" if $taxMode eq "close";
-  my %taxonPlural = qw{phylum phyla class classes order orders family families};
+  my %taxonPlural = qw{phylum phyla class classes order orders family families genus genera species species};
   print p("Showing which $taxonPlural{$taxLevel} have", $hitsString, $whatString . ".",
           "Genomes with",
           ($goodOnly ? "good homologs for" : ""),
@@ -287,7 +314,7 @@ if ($taxLevel) { # taxon distribution mode
                  -default => $taxMode, -labels => \%modeLabels),
       "&nbsp;",
       "Level:",
-      popup_menu(-name => 'taxLevel', -values => [ qw(phylum class order family) ],
+      popup_menu(-name => 'taxLevel', -values => \@levelsAllowed,
                  -default => $taxLevel),
       "&nbsp;",
       a({-title => "a good homolog has at least 30% of the maximum possible bit score"},
@@ -304,16 +331,6 @@ if ($taxLevel) { # taxon distribution mode
   "\n";
 
   if (scalar(keys %gid1) > 0) {
-    my @levelsShow = ("Domain", "Phylum");
-    unless ($taxLevel eq "phylum") {
-      push @levelsShow, "Class";
-      unless ($taxLevel eq "class") {
-        push @levelsShow, "Order";
-        unless ($taxLevel eq "order") {
-          push @levelsShow, "Family";
-        }
-      }
-    }
     my $genomes = getDbHandle()->selectall_hashref("SELECT * from Genome", "gid");
     # taxString is each taxon in this list of levels, joined by ";;;"
     my %taxStringN = ();
@@ -366,7 +383,7 @@ if ($taxLevel) { # taxon distribution mode
     }
 
     my @header = @levelsShow;
-    $header[0] = "&nbsp;";
+    $header[0] = "&nbsp;" if getOrder() eq "";
     push @header, "#Genomes";
     $hitsString = $goodOnly ? "good homologs" : "homologs";
     if ($taxMode eq "close") {
@@ -386,11 +403,15 @@ if ($taxLevel) { # taxon distribution mode
     foreach my $row (@rows) {
       my @lineage = split /;;;/, $row->{taxString};
       my @out = @lineage;
-      $out[0] = domainHtml($out[0]);
-      for (my $i = 1; $i < scalar(@levelsShow); $i++) {
-        $out[$i] = a({-href => "taxon.cgi?level=".lc($levelsShow[$i])."&taxon=".uri_escape($out[$i]),
-                      -style => "text-decoration:none;"},
-                     encode_entities($out[$i]));
+      for (my $i = 0; $i < scalar(@levels); $i++) {
+        if ($levels[$i] eq "domain") {
+          $out[$i] = domainHtml($out[$i]);
+        } else {
+          $out[$i] = a({-href => addOrderToURL("taxon.cgi?level=".$levels[$i]
+                                               ."&taxon=".uri_escape($out[$i])),
+                        -style => "text-decoration:none;"},
+                       encode_entities($out[$i]));
+        }
       }
       my $showNHit;
       my $showMax1 = "&nbsp;";
@@ -415,7 +436,7 @@ if ($taxLevel) { # taxon distribution mode
           $truncate = 1;
           splice @tHits, $maxShow;
         }
-        my $URL = "genes.cgi?" . join("&", map "g=" . $_->{locusTag}, @tHits);
+        my $URL = addOrderToURL("genes.cgi?" . join("&", map "g=" . $_->{locusTag}, @tHits));
         my $truncateString = $truncate ? " top $maxShow" : "";
         my $modeString = $taxMode eq "close" ? "close-by" : "co-occurring";
         $showNHit = a({ -href => $URL,
@@ -711,7 +732,7 @@ if ($nInBoth > $nSame + 1) {
                        size => 2.5,
                        color => $v->{close} ? "green" : "black",
                        fill => $v->{close} ? "green" : "none",
-                       URL => "genes.cgi?" .  join("&", map "g=$_", @locusTags),
+                       URL => addOrderToURL("genes.cgi?" .  join("&", map "g=$_", @locusTags)),
                        title => join(" and ", @locusTags)
                        . " in " . $genome->{gtdbSpecies}
                        . " ($lineage)"), "\n";
@@ -721,12 +742,13 @@ if ($nInBoth > $nSame + 1) {
 print "</TD></TR></TABLE>";
 
 my $downloadURL = "$baseURL&format=tsv";
+my $taxLevel = getOrder() eq "" ? "phylum" : "family";
 print
   p("Or see which taxa have",
-    a({-href => "$baseURL&taxLevel=phylum&taxMode=both"},
+    a({-href => "$baseURL&taxLevel=${taxLevel}&taxMode=both"},
       "both genes"),
     "or have",
-    a({-href => "$baseURL&taxLevel=phylum&taxMode=close"},
+    a({-href => "$baseURL&taxLevel=${taxLevel}&taxMode=close"},
       "the genes nearby,"),
     "or",
     a({ -href => $downloadURL }, "download a table"),
