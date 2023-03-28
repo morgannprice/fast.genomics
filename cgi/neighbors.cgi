@@ -435,7 +435,8 @@ foreach my $hit (@$geneHits) {
     if ($nGenes > 1) {
       my $URL = encode_entities(addOrderToURL("genes.cgi?" . join("&", map "g=$_", @{ $hit->{genes} })));
       my $strains = $hit->{nGenomes} > 1 ? "$hit->{nGenomes} strains" : "1 strain";
-      $subGene = qq{<a xlink:href=$URL><tspan font-size="66%">$nGenes in $strains</tspan></a>};
+      my $speciesShow = encode_entities($hitGenome->{gtdbSpecies});
+      $subGene = qq{<a xlink:href=$URL><title>$nGenes similar genes in $strains of $speciesShow</title><tspan font-size="75%">$nGenes in $strains</tspan></a>};
     }
   }
 
