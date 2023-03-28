@@ -123,16 +123,27 @@ sub hasHits($) {
 sub getHits($) {
   my ($seq) = @_;
   my $subDb = getSubDb();
+  my $hitsFile = hitsFile($seq);
+  print "<!-- hits in $hitsFile -->\n"; # aids debugging
   if (defined $subDb) {
-    return parseBLASTpHits(hitsFile($seq))
-      if (hasHits($seq));
+    return parseBLASTpHits($hitsFile)
+      if hasHits($seq);
     my $hits = computeSubDbHomologs($seq);
-    saveBLASTpHits($hits, hitsFile($seq));
-    return $hits;
+    # Keep only the best alignment for each target protein
+    # (mmseqs2 does this by default)
+    my %seen = ();
+    my @keep = ();
+    foreach my $hit (@$hits) {
+      my $subject = $hit->{subject};
+      push @keep, $hit unless exists $seen{$subject};
+      $seen{$subject} = 1;
+    }
+    saveBLASTpHits(\@keep, $hitsFile);
+    return \@keep;
   }
   #else
   saveMMSeqsHits($seq) unless hasHits($seq);
-  return readMMSeqsHits(hitsFile($seq));
+  return readMMSeqsHits($hitsFile);
 }
 
 # Caches the results in ../tmp/hits/md5.hits
@@ -334,9 +345,9 @@ sub gidToGenome($) {
                                           {}, $gid);
 }
 
-# Convert hits to proteinIds (from readMMSeqsHits) to a list of genes
-# Both input and output should be a list of references; the output rows
-# hves all of the fields from the Gene table as well.
+# Convert hits to proteinIds (from readMMSeqsHits) to a list of genes.
+# Both input and output are a list of references; the output rows
+# have all of the fields from the Gene table as well.
 sub hitsToGenes($) {
   my ($hits) = @_;
   my $dbh = getDbHandle();
