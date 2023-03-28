@@ -128,6 +128,39 @@ if (defined $seq) {
               getOrder() eq "" ? "Find homologs with mmseqs2" : "Find homologs with clustered BLAST"),
             "(fast)");
   }
+
+  if (getOrder() eq "") {
+    # Link to subdb homologs, if subdb has more genomes for this order
+    my $order = $genome->{gtdbOrder};
+    my ($nSubGenomes) = getDbHandle()->selectrow_array(
+      qq{SELECT nGenomes FROM SubDb WHERE level = "order" AND taxon = ? },
+      {}, $order);
+    my ($nMainGenomes) = getDbHandle()->selectrow_array(
+      qq{SELECT nGenomes FROM Taxon WHERE level = "order" AND taxon = ? },
+      {}, $order);
+    if (defined $nSubGenomes && $nSubGenomes > $nMainGenomes) {
+      $nSubGenomes = commify($nSubGenomes);
+      print p("Or find",
+              a({-href => "findHomologs.cgi?locus=$locusTag&order=$order"},
+                "homologs in $nSubGenomes $order"));
+    }
+  } else {
+    # Link to main db homologs
+    # Is this gene in the main db?
+    my $main = getTopDbHandle()->selectrow_arrayref(
+       "SELECT * FROM Gene WHERE locusTag = ? AND proteinId = ?",
+       {}, $locusTag, $gene->{proteinId});
+    my $spec;
+    if ($main) {
+      $spec = "locus=$locusTag";
+    } else {
+      $spec = "seq=$seq&seqDesc=" . encode_entities("$locusTag $gene->{proteinId} $gene->{desc}");
+    }
+    print p("Or find",
+              a({-href => "findHomologs.cgi?${spec}"},
+                "homologs in diverse bacteria and archaea"));
+  }
+
   print showSequence($locusTag . " " . $gene->{desc}, $seq);
 }
 
