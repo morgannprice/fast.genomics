@@ -141,6 +141,15 @@ if ($hitType eq "top") {
   die "Unknown hitType $hitType";
 }
 
+# Force self to be the top hit
+if (defined $gene && $geneHits->[0]{locusTag} ne $gene->{locusTag}) {
+  my @self = grep $_->{locusTag} eq $gene->{locusTag}, @$geneHits;
+  my @other = grep $_->{locusTag} ne $gene->{locusTag}, @$geneHits;
+  my @gh = @self;
+  push @gh, @other;
+  $geneHits = \@gh;
+}
+
 my $options = geneSeqDescSeqOptions($gene,$seqDesc,$seq);
 if ($format eq "") {
   if (@$geneHits < $n) {
@@ -348,6 +357,12 @@ if ($showTree) {
   foreach my $hit (@$geneHits) {
     $nodeToMaxBits{ $hit->{node} } = $hit->{bits};
   }
+  # Ensure that the gene itself comes first
+  if (defined $gene && $geneHits->[0]{locusTag} eq $gene->{locusTag}) {
+    my $selfHit = $geneHits->[0];
+    $nodeToMaxBits{ $selfHit->{node} } += 1e9;
+  }
+
   # Reverse of depth first traversal is bottom-up
   my $dfs = $tree->depthfirst();
   foreach my $node (reverse @$dfs) {
