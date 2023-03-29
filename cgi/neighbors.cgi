@@ -172,9 +172,10 @@ if ($format eq "") {
             "hits, out of at least",
             commify($nTot));
   } elsif ($hitType eq "topCollapse") {
-    print p("Showing $kbShown kb around the top",
-            commify(scalar(@$geneHits)),
-            "clusters x species");
+    print p(a({-title => "Within each species, proteins are clustered at 70% identity and 90% overlap, and only one representative is shown from each cluster"},
+              "Showing $kbShown kb around the top",
+              commify(scalar(@$geneHits)),
+              "clusters x species"));
   } else {
     print p("Showing $kbShown kb around",
             commify(scalar(@$geneHits)),
@@ -424,7 +425,7 @@ foreach my $hit (@$geneHits) {
   if (getOrder() eq "") {
     @levels = qw{domain phylum class order family};
   } else {
-    @levels = qw{order family};
+    @levels = qw{family}; # skip order, is always the same
   }
   foreach my $level (@levels) {
     my $taxon = $hitGenome->{"gtdb" . capitalize($level)};
@@ -437,7 +438,8 @@ foreach my $hit (@$geneHits) {
       $taxShow = qq[<tspan font-family="bold" font-size="85%" fill=$domainColor>$domainChar</tspan>];
       $taxTitle = $taxon;
     } else {
-      $taxShow = qq{<tspan font-size="75%">$taxon</tspan>};
+      my $size = getOrder() eq "" ? "70%" : "85%";
+      $taxShow = qq{<tspan font-size="$size">$taxon</tspan>};
       $taxTitle = $level;
     }
     push @lineage, qq[<a xlink:href=$taxonURL><title>$taxTitle</title>$taxShow</a>];
@@ -451,7 +453,7 @@ foreach my $hit (@$geneHits) {
     . encode_entities($hitGenome->{gtdbSpecies}) . qq[</tspan>];
   my $strainE = encode_entities($hitGenome->{strain});
   if (getOrder() eq "") {
-    push @lineage, qq{<a xlink:href=$genomeURL><title>strain $strainE</title>$speciesE</a>};
+    push @lineage, qq{<a xlink:href=$genomeURL><title>strain $strainE</title><tspan font-size="85%">$speciesE</tspan></a>};
   } else {
     my $speciesURL = addOrderToURL("taxon.cgi?level=species&taxon=".uri_escape($species));
     push @lineage, qq[<a xlink:href=$speciesURL>$speciesE</a>];
@@ -471,11 +473,11 @@ foreach my $hit (@$geneHits) {
     }
   }
 
-  my $xLineage = $genesLeft + 140;
+  my $xLineage = $genesLeft + 135;
   push @svgLines,
     qq[<text x="$genesLeft" y="$yAt" font-size="90%"><title>$hitDetails</title>${identity}% id, $hit->{bits} bits</text>],
     qq[<text x="$xLineage" y="$yAt">],
-    @lineage,
+    join(" ",@lineage),
     qq[</text>];
   $yAt += 6;
   $hit->{yTrack} = $yAt + 9; # remember gene location for the future. This is the middle of the track
@@ -510,7 +512,8 @@ foreach my $hit (@$geneHits) {
 }
 my %scaleBarSvg = scaleBarSvg('xLeft' => $genesLeft + ($xMax - $genesLeft) * 0.7,
                               'yTop' => $yAt + 5);
-my $svgWidth = max($xMax, $scaleBarSvg{xMax});
+# Would be ~900; increase to make sure species name shows up in top level view on some browsers
+my $svgWidth = max($xMax, $scaleBarSvg{xMax}, 1000);
 my $svgHeight = $scaleBarSvg{yMax};
 
 # Now that the gene tracks are laid out, we have a position for each gene, so
