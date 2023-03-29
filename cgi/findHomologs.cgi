@@ -68,6 +68,9 @@ print p("See",
 print p("Or see", a({-href => addOrderToURL("gene.cgi?locus=$gene->{locusTag}")}, "gene"))
   if defined $gene;
 
+my $hitsFile = hitsFile($seq);
+print "<!-- hits are in $hitsFile -->\n"; # aids debugging
+
 print
   h3("Other sequence analysis tools"),
   start_ul,
