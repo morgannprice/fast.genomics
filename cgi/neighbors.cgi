@@ -456,7 +456,7 @@ foreach my $hit (@$geneHits) {
     push @lineage, qq{<a xlink:href=$genomeURL><title>strain $strainE</title><tspan font-size="85%">$speciesE</tspan></a>};
   } else {
     my $speciesURL = addOrderToURL("taxon.cgi?level=species&taxon=".uri_escape($species));
-    push @lineage, qq[<a xlink:href=$speciesURL>$speciesE</a>];
+    push @lineage, qq[<a xlink:href=$speciesURL><title>genus/species</title>$speciesE</a>];
     if (exists $hit->{genes} && exists $hit->{nGenomes}
         && scalar(@{ $hit->{genes} }) > 1) {
       # information about the collapsed group of genes
