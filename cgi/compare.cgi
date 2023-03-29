@@ -47,6 +47,8 @@ my $taxMode = $cgi->param('taxMode') || "both";
 
 unless ($tsv) {
   my $title = "Compare gene presence/absence";
+  my $order = getOrder();
+  $title .= " within $order" if $order ne "";
   $title = ($taxMode eq "close" ? "Taxa with both genes nearby" : "Taxa with both genes")
     if $taxLevel;
   start_page(title => $title);
