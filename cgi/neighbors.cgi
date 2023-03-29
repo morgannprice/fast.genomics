@@ -162,7 +162,13 @@ if (defined $gene && $geneHits->[0]{locusTag} ne $gene->{locusTag}) {
 
 my $options = geneSeqDescSeqOptions($gene,$seqDesc,$seq);
 if ($format eq "") {
-  if (@$geneHits < $n) {
+  if ($hitType eq "topCollapse") {
+    print p(a({-title => "Within each species, proteins are clustered at 70% identity and 90% overlap, and only one representative is shown from each cluster"},
+              "Showing $kbShown kb around",
+              @$geneHits < $n ? "all" : "the top",
+              commify(scalar(@$geneHits)),
+              "clusters x species"));
+  } elsif (@$geneHits < $n) {
     print p("Showing $kbShown kb around all",
             commify(scalar(@$geneHits)),
             $listLabel);
@@ -171,11 +177,6 @@ if ($format eq "") {
             commify(scalar(@$geneHits)),
             "hits, out of at least",
             commify($nTot));
-  } elsif ($hitType eq "topCollapse") {
-    print p(a({-title => "Within each species, proteins are clustered at 70% identity and 90% overlap, and only one representative is shown from each cluster"},
-              "Showing $kbShown kb around the top",
-              commify(scalar(@$geneHits)),
-              "clusters x species"));
   } else {
     print p("Showing $kbShown kb around",
             commify(scalar(@$geneHits)),
