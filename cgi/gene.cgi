@@ -109,10 +109,12 @@ print join("\n",
            $genesSvg{svg},
            $scaleBarSvg{svg},
            "</g>",
-           </svg>) . "\n";
+           "</svg>") . "\n";
 
 if (defined $seq) {
   if (hasHits($seq)) {
+    my $hitsFile = hitsFile($seq);
+    print "<!-- hits are in $hitsFile -->\n"; # aids debugging
     print p("See",
             join(", or ",
                  a({-href => addOrderToURL("neighbors.cgi?locus=$locusTag")}, "gene neighborhoods"),

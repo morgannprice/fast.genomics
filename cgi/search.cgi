@@ -126,7 +126,11 @@ END
     print <<END
 <H3>A database for each order</H3>
 
-<P><i>Fast.genomics</i> also includes a database for each order, with every species represented, and up to 10 genomes per species. You can reach the per-order database from the taxon or genome pages.
+<P><i>Fast.genomics</i> also includes a database for each order, with every species represented,
+and up to 10 genomes per species.
+The per-order database will often include many more close homologs than the top-level
+database (<A HREF="neighbors.cgi?locus=ING2E5A_RS06865&order=Bacteroidales&hitType=topCollapse&tree=1">example</A>).
+You can reach the per-order database from the taxon or genome pages.
 END
 ;
   } else {
@@ -270,6 +274,8 @@ print showSequence($seqDesc, $seq);
 
 my $seqDescE = uri_escape($seqDesc);
 if (hasHits($seq)) {
+  my $hitsFile = hitsFile($seq);
+  print "\n<!-- hits are in $hitsFile -->\n"; # aids debugging
   print p("See",
           join(", or ",
                a({-href => addOrderToURL("neighbors.cgi?seqDesc=${seqDescE}&seq=${seq}")},
