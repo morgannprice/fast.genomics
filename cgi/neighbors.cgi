@@ -419,39 +419,63 @@ foreach my $hit (@$geneHits) {
   my $eValue = sprintf("%.2g", $hit->{eValue});
   my $hitDetails = "$hit->{qBegin}:$hit->{qEnd}/$seqLen of $qShow"
     . " is ${identity}% identical to $hit->{sBegin}:$hit->{sEnd}/$nHitAA of $hit->{locusTag} (E = $eValue)";
-  my $domainChar = $hitGenome->{gtdbDomain} eq "Bacteria" ? "B" : "A";
-  my $domainColor = $domainChar eq "B" ? "blue" : "green";
   my @lineage = ();
-  foreach my $level (qw{phylum class order family}) {
+  my @levels = ();
+  if (getOrder() eq "") {
+    @levels = qw{domain phylum class order family};
+  } else {
+    @levels = qw{order family};
+  }
+  foreach my $level (@levels) {
     my $taxon = $hitGenome->{"gtdb" . capitalize($level)};
     my $taxonURL = encode_entities(addOrderToURL("taxon.cgi?level=$level&taxon=".uri_escape($taxon)));
-    push @lineage, qq[<a xlink:href=$taxonURL><tspan font-size="75%">$taxon</tspan></a>];
+    my $taxShow;
+    my $taxTitle;
+    if ($level eq "domain") {
+      my $domainChar = $taxon eq "Bacteria" ? "B" : "A";
+      my $domainColor = $domainChar eq "B" ? "blue" : "green";
+      $taxShow = qq[<tspan font-family="bold" font-size="85%" fill=$domainColor>$domainChar</tspan>];
+      $taxTitle = $taxon;
+    } else {
+      $taxShow = qq{<tspan font-size="75%">$taxon</tspan>};
+      $taxTitle = $level;
+    }
+    push @lineage, qq[<a xlink:href=$taxonURL><title>$taxTitle</title>$taxShow</a>];
   }
-  my $xDomain = $genesLeft + 140;
-  my $xLineage = $genesLeft + 155;
-  my $subGene = "";
-  if (exists $hit->{genes} && exists $hit->{nGenomes}) {
-    my $nGenes = scalar(@{ $hit->{genes} });
-    if ($nGenes > 1) {
-      my $URL = encode_entities(addOrderToURL("genes.cgi?" . join("&", map "g=$_", @{ $hit->{genes} })));
-      my $strains = $hit->{nGenomes} > 1 ? "$hit->{nGenomes} strains" : "1 strain";
-      my $speciesShow = encode_entities($hitGenome->{gtdbSpecies});
-      $subGene = qq{<a xlink:href=$URL><title>$nGenes similar genes in $strains of $speciesShow</title><tspan font-size="75%">$nGenes in $strains</tspan></a>};
+  # Add species and sometimes strain information to the lineage (gtdbSpecies includes the genus name)
+  # In top-level db, always show the species (but not strain) and link to the genome
+  # In sub-db, link species to the taxon, and show the strain, except if this is a collapsed group, show the
+  # #genes/#genomes instead.
+  my $species = $hitGenome->{gtdbSpecies};
+  my $speciesE = qq{<tspan font-style="italic">}
+    . encode_entities($hitGenome->{gtdbSpecies}) . qq[</tspan>];
+  my $strainE = encode_entities($hitGenome->{strain});
+  if (getOrder() eq "") {
+    push @lineage, qq{<a xlink:href=$genomeURL><title>strain $strainE</title>$speciesE</a>};
+  } else {
+    my $speciesURL = addOrderToURL("taxon.cgi?level=species&taxon=".uri_escape($species));
+    push @lineage, qq[<a xlink:href=$speciesURL>$speciesE</a>];
+    if (exists $hit->{genes} && exists $hit->{nGenomes}
+        && scalar(@{ $hit->{genes} }) > 1) {
+      # information about the collapsed group of genes
+      my $nGenes =  scalar(@{ $hit->{genes} });
+      my $genesURL = encode_entities(addOrderToURL("genes.cgi?" . join("&", map "g=$_", @{ $hit->{genes} })));
+      my ($nSpeciesGenomes) = getDbHandle()->selectrow_array(
+        qq{SELECT nGenomes FROM Taxon WHERE taxon = ? AND level = "species"}, {}, $species);
+      die "Unknown species $species" unless $nSpeciesGenomes;
+      my $strains = $hit->{nGenomes} > 1 ? "$hit->{nGenomes}/$nSpeciesGenomes strains " : "1/$nSpeciesGenomes strain";
+      push @lineage, qq{<a xlink:href=$genesURL><title>$nGenes similar genes (over 70% identity and 90% overlap) in $strains of $speciesE</title><tspan font-size="90%">$nGenes genes in $strains</tspan></a>};
+    } else {
+      # link the strain to the genome
+      push @lineage, qq{<a xlink:href=$genomeURL><title>strain</title>$strainE</a>};
     }
   }
 
+  my $xLineage = $genesLeft + 140;
   push @svgLines,
     qq[<text x="$genesLeft" y="$yAt" font-size="90%"><title>$hitDetails</title>${identity}% id, $hit->{bits} bits</text>],
-    qq[<text x="$xDomain" y="$yAt" font-family="bold" font-size="90%" fill=$domainColor>],
-    qq[<title>$hitGenome->{gtdbDomain}</title>$domainChar</text>],
     qq[<text x="$xLineage" y="$yAt">],
     @lineage,
-    qq[<a xlink:href="$genomeURL">],
-    qq[<tspan font-style="italic" font-size="90%">],
-    qq[<title>strain $hitGenome->{strain} ($hitGenome->{gid})</title>],
-    encode_entities($hitGenome->{gtdbSpecies}),
-    qq[</tspan></a>],
-    $subGene,
     qq[</text>];
   $yAt += 6;
   $hit->{yTrack} = $yAt + 9; # remember gene location for the future. This is the middle of the track
