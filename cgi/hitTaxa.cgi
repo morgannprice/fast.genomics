@@ -59,7 +59,7 @@ unless (hasHits($seq)) {
   exit(0);
 }
 
-my $title = 'Taxonomic prevalence';
+my $title = getOrder() eq "" ? "Taxonomic prevalence" : "Prevalence within " . getOrder();
 if ($gene) {
   $title .= " of $gene->{locusTag} and its homologs";
 } else {
