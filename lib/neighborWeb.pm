@@ -24,7 +24,7 @@ our (@ISA,@EXPORT);
 @ISA = qw(Exporter);
 @EXPORT = qw{setOrder getOrder getSubDb addOrderToURL orderToHidden
              getDbHandle getTopDbHandle getSubDbHandle
-             hasHits getHits
+             hasHits getHits hitsFile
              hitsToGenes hitsToTopGenes hitsToTopGenesClustered hitsToRandomGenes
              parseGeneQuery
              getGeneSeqDesc geneSeqDescSeqOptions geneSeqDescSeqHidden
@@ -124,7 +124,7 @@ sub getHits($) {
   my ($seq) = @_;
   my $subDb = getSubDb();
   my $hitsFile = hitsFile($seq);
-  print "<!-- hits in $hitsFile -->\n"; # aids debugging
+
   if (defined $subDb) {
     return parseBLASTpHits($hitsFile)
       if hasHits($seq);
