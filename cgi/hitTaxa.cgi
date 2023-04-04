@@ -78,9 +78,20 @@ my $geneHits = hitsToGenes($hits);
 my $maxScore = estimateTopScore($geneHits->[0], $seq);
 my $scoreThreshold = sprintf("%.1f", 0.3 * $maxScore);
 my @goodHits = grep $_->{bits} >= $scoreThreshold, @$geneHits;
+my %gidAll = ();
+foreach my $gh (@$geneHits) {
+  $gidAll{ $gh->{gid} }++;
+}
+my %gidGood = ();
+foreach my $gh (@goodHits) {
+  $gidGood{ $gh->{gid} }++;
+}
+
 my $nGood = scalar(@goodHits);
-print p("Loaded", commify(scalar(@$geneHits)), "hits,",
-       "including ", commify($nGood), "good hits (&ge; $scoreThreshold bits)");
+print p("Loaded", commify(scalar(@$geneHits)), "hits from", commify(scalar(keys %gidAll)),
+        "genomes, including",
+       commify($nGood), "good hits (&ge; $scoreThreshold bits) from",
+       scalar(keys %gidGood), "genomes.");
 $geneHits = \@goodHits if $showGood;
 
 print p("Showing the distribution of",
@@ -150,7 +161,7 @@ if ($all eq "freq") {
   while (my ($taxString, $tHits) = each %taxHits) {
     my $row = { 'taxString' => $taxString, 'nHits' => scalar(@$tHits) };
     $row->{nGenomes} = $taxStringN{$taxString} || die $taxString;
-    # Count distinct genomes
+    # Count distinct genomes in this taxon
     my %gid = (); # genome id to #hits
     foreach my $hit (@$tHits) {
       $gid{ $hit->{gid} }++;
