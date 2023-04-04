@@ -134,17 +134,11 @@ if (defined $seq) {
   if (getOrder() eq "") {
     # Link to subdb homologs, if subdb has more genomes for this order
     my $order = $genome->{gtdbOrder};
-    my ($nSubGenomes) = getDbHandle()->selectrow_array(
-      qq{SELECT nGenomes FROM SubDb WHERE level = "order" AND taxon = ? },
-      {}, $order);
-    my ($nMainGenomes) = getDbHandle()->selectrow_array(
-      qq{SELECT nGenomes FROM Taxon WHERE level = "order" AND taxon = ? },
-      {}, $order);
-    if (defined $nSubGenomes && $nSubGenomes > $nMainGenomes) {
-      $nSubGenomes = commify($nSubGenomes);
+    my ($nSubGenomes) = moreGenomesInSubDb("order", $order, $order);
+    if ($nSubGenomes > 0) {
       print p("Or find",
               a({-href => "findHomologs.cgi?locus=$locusTag&order=$order"},
-                "homologs in $nSubGenomes $order"));
+                "homologs in", commify($nSubGenomes), $order));
     }
   } else {
     # Link to main db homologs

@@ -288,6 +288,14 @@ if (hasHits($seq)) {
                a({-href => addOrderToURL("compare.cgi?seqDesc=${seqDescE}&seq=${seq}"),
                   -title => "compare presence/absence of homologs and their proximity"},
                  "compare presence/absence")));
+  my $order = getTopHitOrder($seq);
+  if (defined $order) {
+    my $nSubGenomes = moreGenomesInSubDb("order", $order, $order);
+    print p("Or find",
+            a({ -href => "findHomologs.cgi?order=$order&seqDesc=${seqDescE}&seq=${seq}" },
+              "homologs in", commify($nSubGenomes), $order))
+      if $nSubGenomes > 0;
+  }
 } else {
   print p(a({-href => addOrderToURL("findHomologs.cgi?seqDesc=$seqDescE&seq=${seq}")},
             getOrder() eq "" ? "Find homologs with mmseqs2" : "Find homologs with clustered BLAST"),

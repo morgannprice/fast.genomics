@@ -58,24 +58,13 @@ if (getOrder() ne "") {
             "homologs in diverse bacteria and archaea"));
 } elsif (hasHits($seq)) {
   # Find the order of the top hit and suggest searching there
-  my $hits = getHits($seq);
-  if (@$hits > 0) {
-    my $hg = hitsToGenes([ $hits->[0] ])->[0];
-    my $gid = $hg->{gid};
-    my $genome = gidToGenome($gid) || die "Cannot find genome $gid";
-    my $order = $genome->{"gtdbOrder"};
-    my ($nSubGenomes) = getDbHandle()->selectrow_array(
-      qq{SELECT nGenomes FROM SubDb WHERE level = "order" AND taxon = ? },
-      {}, $order);
-    my ($nMainGenomes) = getDbHandle()->selectrow_array(
-      qq{SELECT nGenomes FROM Taxon WHERE level = "order" AND taxon = ? },
-      {}, $order);
-    if (defined $nSubGenomes && $nSubGenomes > $nMainGenomes) {
-      $nSubGenomes = commify($nSubGenomes);
-      print p("Or find",
-              a({-href => "findHomologs.cgi?order=$order&$options"},
-                "homologs in $nSubGenomes $order"));
-    }
+  my $order = getTopHitOrder($seq);
+  if (defined $order) {
+    my $nSubGenomes = moreGenomesInSubDb("order", $order, $order);
+    print p("Or find",
+            a({-href => "findHomologs.cgi?order=$order&$options"},
+              "homologs in", commify($nSubGenomes), $order))
+      if $nSubGenomes > 0;
   }
 }
 

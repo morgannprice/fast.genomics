@@ -72,11 +72,12 @@ $format = "" unless $format eq "fasta" || $format eq "tsv" || $format eq "newick
 $format = "" unless hasHits($seq);
 
 if ($format eq "") {
-  my $title = 'Gene neighborhoods';
+  my $title = getOrder() eq "" ? "Homologs of "
+    : "Homologs from " . getOrder() . " of ";
   if ($gene) {
-    $title .= " for $gene->{locusTag} and homologs";
+    $title .= $gene->{locusTag};
   } else {
-    $title .= " for homologs of " . encode_entities($seqDesc);
+    $title .= encode_entities($seqDesc);
   }
   start_page('title' => $title);
   autoflush STDOUT 1; # show preliminary results
