@@ -24,7 +24,8 @@ our (@ISA,@EXPORT);
 @ISA = qw(Exporter);
 @EXPORT = qw{setOrder getOrder getSubDb addOrderToURL orderToHidden
              getDbHandle getTopDbHandle getSubDbHandle
-             hasHits getHits hitsFile
+             hasHits getHits hitsFile getTopHitOrder
+             moreGenomesInSubDb
              hitsToGenes hitsToTopGenes hitsToTopGenesClustered hitsToRandomGenes
              parseGeneQuery
              getGeneSeqDesc geneSeqDescSeqOptions geneSeqDescSeqHidden
@@ -206,19 +207,23 @@ sub computeSubDbHomologs($) {
   my @clusterIds = sort keys %clusterIds;
   my $subDbh = getSubDbHandle();
   my $proteinIds = expandByClusters(\@clusterIds, $subDbh);
+  my ($nGenomes) = getDbHandle()->selectrow_array("SELECT COUNT(*) FROM Genome;");
+  my $nMaxHits = max(int(1.5 * $nGenomes + 0.5), 200);
+  splice @$proteinIds, $nMaxHits if scalar(@$proteinIds) > $nMaxHits;
+  print "<!-- expanded to " . scalar(@$proteinIds) . " -->\n";
   my $tmpPre = "/tmp/neighborWeb.$$";
   proteinsToFaa($proteinIds, "$tmpPre.faa", $subDbh);
+  print "<!-- fetched protein sequences -->\n";
   formatBLASTp($formatdb, "$tmpPre.faa");
   my ($dbSize) = $subDbh->selectrow_array("SELECT nClusteredAA FROM ClusteringInfo");
   my $hits = runBLASTp('blastall' => $blastall, 'query' => $seq, 'db' => "$tmpPre.faa",
             'eValue' => 1e-3, 'nCPUs' => 2, 'dbSize' => $dbSize);
+  print "<!-- ran BLASTp 2nd time -->\n";
   unlink("$tmpPre.faa");
   foreach my $suffix (qw{phr pin psq}) {
     unlink("$tmpPre.faa.$suffix");
   }
   # Limit the number of hits
-  my ($nGenomes) = getDbHandle()->selectrow_array("SELECT COUNT(*) FROM Genome;");
-  my $nMaxHits = max(int(1.5 * $nGenomes + 0.5), 200);
   splice @$hits, $nMaxHits if scalar(@$hits) > $nMaxHits;
   return $hits;
 }
@@ -306,7 +311,7 @@ sub parseGeneQuery($) {
     my $genomes = $dbh->selectall_arrayref("SELECT * FROM Genome WHERE gtdbGenus LIKE ?",
                                            { Slice => {} }, $genus);
     return ("error" => "Text queries must start with a genus, but genus "
-            . encode_entities($genus) . " is not in the database")
+            . encode_entities($genus) . " is not in this database")
       if @$genomes == 0;
     print "<p>Multiple genomes match " . encode_entities($genus) . " &mdash; searching just one</p>\n"
       if @$genomes > 1;
@@ -352,11 +357,14 @@ sub hitsToGenes($) {
   my ($hits) = @_;
   my $dbh = getDbHandle();
   my @hitGenes = ();
+  my $n = 0;
   foreach my $hit (@$hits) {
     my $proteinId = $hit->{subject};
     my $hg = $dbh->selectall_arrayref("SELECT * FROM Gene WHERE proteinId=?",
                                       { Slice => {} }, $proteinId);
     die "No genes for protein $proteinId" unless @$hg > 0;
+    $n++;
+    print "<!-- protein hit $n -->\n" if $n % 20 == 0;
     foreach my $hitGene (@$hg) {
       while (my ($key,$value) = each %$hit) {
         $hitGene->{$key} = $value;
@@ -457,6 +465,7 @@ END
 ;
 }
 
+# The title should have any entities encoded
 sub start_page {
   my (%param) = @_;
   my $title = $param{title} || "";
@@ -866,6 +875,63 @@ sub geneHitsToTree {
     unlink($alnFile);
   }
   return MOTree::new( file => $treeFile );
+}
+
+# Accepts a sequence or a reference to a list of hits (either protein hits or gene hits)
+# Returns undef if there are no hits
+sub getTopHitOrder($) {
+  my ($in) = @_;
+  my $hits;
+  if (ref $in eq "ARRAY") {
+    $hits = $in;
+  } elsif (ref $in eq "") {
+    # input should be a sequence
+    $hits = getHits($in);
+  } else {
+    die "Invalid input to getTopHitOrder";
+  }
+  return undef if @$hits == 0;
+  my $top = $hits->[0];
+  if (!exists $top->{gid}) {
+    $top = hitsToGenes([$top])->[0];
+  }
+  my $gid = $top->{gid};
+  my $genome = gidToGenome($gid) || die "Cannot find genome $gid";
+  return $genome->{"gtdbOrder"};
+}
+
+# If the subDb has more genomes, return the number, else 0 */
+sub moreGenomesInSubDb($$$) {
+  my ($taxLevel, $taxon, $subDb) = @_;
+  return 0 if getOrder() ne "" || !defined $taxon || !defined $subDb;
+  my ($nMainGenomes) = getDbHandle()->selectrow_array(
+      qq{SELECT nGenomes FROM Taxon WHERE level = ? AND taxon = ? },
+      {}, $taxLevel, $taxon);
+  my $nSubGenomes;
+  if ($taxLevel eq "order") {
+    return 0 unless $subDb eq $taxon;
+    $nSubGenomes = getDbHandle()->selectrow_array(
+      qq{SELECT nGenomes FROM SubDb WHERE taxon = ? },
+      {}, $taxon);
+  } else {
+    return 0 unless $taxLevel eq "family" || $taxLevel eq "genus" || $taxLevel eq "species";
+    # find the relevant order
+    my $row = getDbHandle()->selectrow_array("SELECT * FROM Taxon WHERE level = ? AND taxon = ?",
+                                             { Slice => {}  }, $taxLevel, $taxon);
+    die "Unknown tax $taxLevel $taxon" unless $row;
+    my $parts = taxToParts($row, getTaxa);
+    my $order = $parts->{order};
+    die unless defined $order;
+    my ($prefix) = getDbHandle()->selectrow_array("SELECT prefix FROM SubDb WHERE level = ? AND taxon = ?",
+                                                  {}, "order", $order);
+    return 0 unless defined $prefix;
+    my $sqldb = "../data/$prefix/sub.db";
+    my $dbh = DBI->connect("dbi:SQLite:dbname=$sqldb","","",{ RaiseError => 1 }) || die $DBI::errstr;
+    my $field = "gtdb" . capitalize($taxLevel);
+    ($nSubGenomes) = $dbh->selectrow_array("SELECT COUNT(*) FROM Genomes WHERE $field = ?",
+                                           {}, $taxon);
+  }
+  return $nSubGenomes > $nMainGenomes ? $nSubGenomes : 0;
 }
 
 1;
