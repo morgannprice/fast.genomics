@@ -56,10 +56,7 @@ if (getOrder() ne "") {
   my ($n) = $topDbh->selectrow_array("SELECT COUNT(*) from Genome WHERE gtdbOrder = ?",
                                      {}, $order);
   print p({-style => "font-size: 80%; margin-left: 2em;"},
-          "$order is in $domain : $phylum : $class. See",
-          a({-href => "taxon.cgi?level=order&taxon=$order"}, "main database").",",
-          "which includes $n representative genomes of $order"
-         ), "\n";
+          "$order is in $domain : $phylum : $class"), "\n";
 }
 
 if ($level eq "species" || $taxObj->{nGenomes} == 1) {
@@ -84,17 +81,29 @@ if ($level eq "species" || $taxObj->{nGenomes} == 1) {
   # count the genomes
   print p("Genomes:", commify($taxObj->{nGenomes}));
 }
-if ($level eq "order") {
-  # show a link to the subdb, if there is one and it has more genomes than the main db
-  my ($subDb, $nSubGenomes) = getDbHandle()->selectrow_array(
-    qq{SELECT prefix, nGenomes FROM SubDb WHERE level = "order" AND taxon = ? },
-    {}, $taxon);
-  if (defined $nSubGenomes && $nSubGenomes > $taxObj->{nGenomes}) {
-    print p({-style => "margin-left: 5em;"},
-            "Or see the database for $taxon only with",
-            a({-href => "taxon.cgi?level=order&taxon=$taxon&order=$taxon"},
-              commify($nSubGenomes), "genomes"));
+
+my $otherDbStyle = "margin-left: 4em; font-size: 90%;";
+if (getOrder() eq "") {
+  if ($level eq "order" || $level eq "family" || $level eq "genus" || $level eq "species") {
+    # link to subdb if it has more genomes
+    my $order = $levelToParent->{order};
+    my $nSubGenomes = moreGenomesInSubDb($level, $taxon, $order);
+    print p({-style => $otherDbStyle},
+            "Or see",
+            a({-href => "taxon.cgi?level=$level&taxon=$taxon&order=$order"},
+              $nSubGenomes, "genomes"),
+            "in the database for", $order, "only")
+      if $nSubGenomes > 0;
   }
+} else {
+  # show a link to the main database, if it has this taxon
+  my $topRow = getTopDbHandle()->selectrow_hashref("SELECT * FROM Taxon WHERE level = ? AND taxon = ?",
+                                                   {}, $level, $taxon);
+  print p({-style => $otherDbStyle},
+          "Or see",
+          a({-href => "taxon.cgi?level=$level&taxon=$taxon" }, $topRow->{nGenomes}, "genomes"),
+          "in the database of diverse bacteria and archaea")
+    if $topRow;
 }
 print "\n";
 
