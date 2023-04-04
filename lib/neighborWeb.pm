@@ -702,14 +702,18 @@ sub domainHtml($) {
 }
 
 # Returns a hash of level => taxon => row from Taxon table
+my $mem_getTaxa;
 sub getTaxa {
-  my $taxa = getDbHandle()->selectall_arrayref("SELECT * from Taxon", { Slice => {} });
-  # assume level x taxon is unique
-  my %taxa = (); # level => taxon => row
-  foreach my $tax (@$taxa) {
-    $taxa{ $tax->{level} }{ $tax->{taxon} } = $tax;
+  if (!defined $mem_getTaxa) {
+    my $taxa = getDbHandle()->selectall_arrayref("SELECT * from Taxon", { Slice => {} });
+    # assume level x taxon is unique
+    my %taxa = (); # level => taxon => row
+    foreach my $tax (@$taxa) {
+      $taxa{ $tax->{level} }{ $tax->{taxon} } = $tax;
+    }
+    $mem_getTaxa = \%taxa;
   }
-  return \%taxa;
+  return $mem_getTaxa;
 }
 
 my @levelsOrdered = qw{domain phylum class order family genus species};
@@ -916,8 +920,8 @@ sub moreGenomesInSubDb($$$) {
   } else {
     return 0 unless $taxLevel eq "family" || $taxLevel eq "genus" || $taxLevel eq "species";
     # find the relevant order
-    my $row = getDbHandle()->selectrow_array("SELECT * FROM Taxon WHERE level = ? AND taxon = ?",
-                                             { Slice => {}  }, $taxLevel, $taxon);
+    my $row = getDbHandle()->selectrow_hashref("SELECT * FROM Taxon WHERE level = ? AND taxon = ?",
+                                               {}, $taxLevel, $taxon);
     die "Unknown tax $taxLevel $taxon" unless $row;
     my $parts = taxToParts($row, getTaxa);
     my $order = $parts->{order};
@@ -928,7 +932,7 @@ sub moreGenomesInSubDb($$$) {
     my $sqldb = "../data/$prefix/sub.db";
     my $dbh = DBI->connect("dbi:SQLite:dbname=$sqldb","","",{ RaiseError => 1 }) || die $DBI::errstr;
     my $field = "gtdb" . capitalize($taxLevel);
-    ($nSubGenomes) = $dbh->selectrow_array("SELECT COUNT(*) FROM Genomes WHERE $field = ?",
+    ($nSubGenomes) = $dbh->selectrow_array("SELECT COUNT(*) FROM Genome WHERE $field = ?",
                                            {}, $taxon);
   }
   return $nSubGenomes > $nMainGenomes ? $nSubGenomes : 0;
