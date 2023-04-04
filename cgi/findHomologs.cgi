@@ -22,7 +22,11 @@ my $cgi = CGI->new;
 setOrder(param('order'));
 my ($gene, $seqDesc, $seq) = getGeneSeqDesc($cgi);
 
-start_page('title' => 'Find homologs');
+my $title = getOrder() eq "" ?
+  "Find homologs in diverse bacteria and archaea"
+  : "Find homologs in " . getOrder();
+
+start_page('title' => $title);
 autoflush STDOUT 1; # show preliminary results
 
 if (defined $gene && !defined $seq) {
@@ -38,20 +42,16 @@ print p("Finding homologs for", encode_entities($seqDesc)),
   showSequence($seqDesc, $seq),
   "\n";
 my $hits = getHits(uc($seq));
-my $hitGenes = hitsToGenes($hits);
 
 my $maxScore = 0;
-if (@$hitGenes > 0) {
-  my $top = $hitGenes->[0];
+if (@$hits > 0) {
+  my $top = $hits->[0];
   my $coverage = ($top->{qEnd} - $top->{qBegin} + 1)/length($seq);
   $maxScore = $top->{bits} / ($top->{identity} * $coverage);
 }
-my %gidHits = map { $_->{gid} => $_ } @$hitGenes;
-my ($nGenomes) = getDbHandle()->selectrow_array("SELECT COUNT(*) FROM Genome");
-print p("Found", commify(scalar(@$hitGenes)), "hits in",
-        commify(scalar(keys %gidHits)), " of", commify($nGenomes), "genomes");
-print p("Found",
-        commify(scalar(grep $_->{bits} >= $maxScore*0.3, @$hitGenes)),
+print p("Found at least", commify(scalar(@$hits)), "hits");
+print p("Found at least",
+        commify(scalar(grep $_->{bits} >= $maxScore*0.3, @$hits)),
         "hits with &ge;30% of max score (at least " . sprintf("%.1f",0.3 * $maxScore) . " bits)");
 
 my $options = defined $gene ? "locus=".$gene->{locusTag}
@@ -64,9 +64,24 @@ print p("See",
              a({-href => addOrderToURL("downloadHomologs.cgi?${options}"),
                 -title => "tab-delimited table of homologs"}, "download homologs"),
              a({-href => addOrderToURL("compare.cgi?${options}")}, "compare presence/absence")))
-  if @$hitGenes > 0;
+  if @$hits > 0;
 print p("Or see", a({-href => addOrderToURL("gene.cgi?locus=$gene->{locusTag}")}, "gene"))
   if defined $gene;
+
+if (getOrder() eq "") {
+  my $order = getTopHitOrder($hits);
+  if (defined $order) {
+    my $nSubGenomes = moreGenomesInSubDb("order", $order, $order);
+    print p("Or find",
+            a({ -href => "findHomologs.cgi?order=$order&${options}" },
+              "homologs in", commify($nSubGenomes), $order))
+      if $nSubGenomes > 0;
+  }
+} else {
+  print p("Or find",
+          a({-href => "findHomologs.cgi?${options}" },
+            "homologs in diverse bacteria and archaea"));
+}
 
 my $hitsFile = hitsFile($seq);
 print "<!-- hits are in $hitsFile -->\n"; # aids debugging
