@@ -31,6 +31,7 @@ use MOTree; # from PaperBLAST/lib/
 #   randomAny means random N hits
 # format -- empty (default -- shows an svg) or fasta (proteins sequences of homologs shown)
 #     or tsv (tab-delimited table of all genes shown)
+#     or newick (the tree) or svg
 # tree -- set to build a tree (if needed) and render it
 
 my $cgi = CGI->new;
@@ -68,7 +69,7 @@ unless (hasHits($seq)) {
 }
 
 my $format = $cgi->param('format') || "";
-$format = "" unless $format eq "fasta" || $format eq "tsv" || $format eq "newick";
+$format = "" unless $format eq "fasta" || $format eq "tsv" || $format eq "newick" || $format eq "svg";
 $format = "" unless hasHits($seq);
 
 if ($format eq "") {
@@ -105,8 +106,16 @@ if ($format eq "") {
   } elsif ($format eq "newick") {
     $showTree = 1;
     print "Content-Type:text\n";
+  } elsif ($format eq "svg") {
+    print "Content-Type:image/svg+xml\n";
   }
   print "Content-Disposition: attachment; filename=$fileName\n\n";
+}
+
+# Put the xml tag at the end so that any HTML/XML comments, such as from neighborWeb::hitsToGopGenes(),
+# are acceptable.
+if ($format eq "svg") {
+  print qq{<?xml version="1.0"?>}."\n";
 }
 
 if (defined $gene) {
@@ -219,6 +228,8 @@ if ($format eq "") {
   push @links, a({-href => "hitTaxa.cgi?$options"},
                  "taxonomic distribution"). " of its homologs";
   my @downloads = ();
+  push @downloads, a({ -href => "neighbors.cgi?${options}&n=${n}&hitType=${hitType}&tree=${showTree}&format=svg",
+                       -title => "figure in SVG format"}, "SVG");
   push @downloads, a({ -href => "neighbors.cgi?${options}&n=${n}&hitType=${hitType}&format=fasta",
                        -title => "homologs shown (fasta format)"}, "protein sequences");
   push @downloads, a({ -href => "neighbors.cgi?${options}&n=${n}&hitType=${hitType}&kb=${kbShown}&format=tsv",
@@ -409,7 +420,7 @@ if ($showTree) {
   $geneHits = \@hitsSorted;
 }
 
-die unless $format eq "";
+die unless $format eq "" || $format eq "svg";
 
 foreach my $hit (@$geneHits) {
   my $hitGenome = gidToGenome($hit->{gid}) || die;
@@ -437,14 +448,14 @@ foreach my $hit (@$geneHits) {
     if ($level eq "domain") {
       my $domainChar = $taxon eq "Bacteria" ? "B" : "A";
       my $domainColor = $domainChar eq "B" ? "blue" : "green";
-      $taxShow = qq[<tspan font-family="bold" font-size="85%" fill=$domainColor>$domainChar</tspan>];
+      $taxShow = qq[<tspan font-family="bold" font-size="85%" fill="$domainColor">$domainChar</tspan>];
       $taxTitle = $taxon;
     } else {
       my $size = getOrder() eq "" ? "70%" : "85%";
       $taxShow = qq{<tspan font-size="$size">$taxon</tspan>};
       $taxTitle = $level;
     }
-    push @lineage, qq[<a xlink:href=$taxonURL><title>$taxTitle</title>$taxShow</a>];
+    push @lineage, qq[<a xlink:href="$taxonURL"><title>$taxTitle</title>$taxShow</a>];
   }
   # Add species and sometimes strain information to the lineage (gtdbSpecies includes the genus name)
   # In top-level db, always show the species (but not strain) and link to the genome
@@ -455,10 +466,10 @@ foreach my $hit (@$geneHits) {
     . encode_entities($hitGenome->{gtdbSpecies}) . qq[</tspan>];
   my $strainE = encode_entities($hitGenome->{strain});
   if (getOrder() eq "") {
-    push @lineage, qq{<a xlink:href=$genomeURL><title>strain $strainE</title><tspan font-size="85%">$speciesE</tspan></a>};
+    push @lineage, qq{<a xlink:href="$genomeURL"><title>strain $strainE</title><tspan font-size="85%">$speciesE</tspan></a>};
   } else {
     my $speciesURL = addOrderToURL("taxon.cgi?level=species&taxon=".uri_escape($species));
-    push @lineage, qq[<a xlink:href=$speciesURL><title>genus/species</title>$speciesE</a>];
+    push @lineage, qq[<a xlink:href="$speciesURL"><title>genus/species</title>$speciesE</a>];
     if (exists $hit->{genes} && exists $hit->{nGenomes}
         && scalar(@{ $hit->{genes} }) > 1) {
       # information about the collapsed group of genes
@@ -468,10 +479,10 @@ foreach my $hit (@$geneHits) {
         qq{SELECT nGenomes FROM Taxon WHERE taxon = ? AND level = "species"}, {}, $species);
       die "Unknown species $species" unless $nSpeciesGenomes;
       my $strains = $hit->{nGenomes} > 1 ? "$hit->{nGenomes}/$nSpeciesGenomes strains " : "1/$nSpeciesGenomes strain";
-      push @lineage, qq{<a xlink:href=$genesURL><title>$nGenes similar genes (over 70% identity and 90% overlap) in $strains of $speciesE</title><tspan font-size="90%">$nGenes genes in $strains</tspan></a>};
+      push @lineage, qq{<a xlink:href="$genesURL"><title>$nGenes similar genes (over 70% identity and 90% overlap) in $strains of $speciesE</title><tspan font-size="90%">$nGenes genes in $strains</tspan></a>};
     } else {
       # link the strain to the genome
-      push @lineage, qq{<a xlink:href=$genomeURL><title>strain</title>$strainE</a>};
+      push @lineage, qq{<a xlink:href="$genomeURL"><title>strain</title>$strainE</a>};
     }
   }
 
@@ -514,6 +525,7 @@ foreach my $hit (@$geneHits) {
 }
 my %scaleBarSvg = scaleBarSvg('xLeft' => $genesLeft + ($xMax - $genesLeft) * 0.7,
                               'yTop' => $yAt + 5);
+push @svgLines, $scaleBarSvg{svg};
 # Would be ~900; increase to make sure species name shows up in top level view on some browsers
 my $svgWidth = max($xMax, $scaleBarSvg{xMax}, 1000);
 my $svgHeight = $scaleBarSvg{yMax};
@@ -582,14 +594,27 @@ if ($tree) {
   push @svgLines, $tree->drawSvgScaleBar('nodeX' => \%nodeX, 'y' => 10);
 }
 
+if ($format eq "svg") {
+  # I tried using version="1.1" and setting xml:base to allow the links to work after the SVG is downloaded,
+  # but that didn't work
+  # Instead, rewrite relative links to point at http://fast.genomics.lbl.gov/cgi/
+  foreach (@svgLines) { s! xlink:href *= *"([^/][^"]+)"! xlink:href="https://fast.genomics.lbl.gov/cgi/$1"!g; }
+  # xmlns:xlink= allows the SVG to contain xlink:href attributes for <A> tags
+  print join("\n",
+             qq{<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="$svgWidth" height="$svgHeight">},
+             "<defs>", @defLines, "</defs>",
+             qq{<g transform="scale(1)">},
+             @svgLines,
+             "</g>",
+             "</svg>")."\n";
+  exit(0);
+}
+
 print join("\n",
            qq[<SVG width="$svgWidth" height="$svgHeight" style="position: relative; left: 1em;">],
-           "<defs>",
-           @defLines,
-           "</defs>",
+           "<defs>", @defLines, "</defs>",
            qq[<g transform="scale(1.0)">],
            @svgLines,
-           $scaleBarSvg{svg},
            "</g>",
            "</svg>") . "\n";
 
