@@ -179,8 +179,9 @@ sub axisTicks {
   return join("\n", @out);
 }
 
-# arguments are self, x, y, and optionally a hash with URL, title, color, and size
-# (By default, points are black empty circles, and the size is the radius)
+# arguments are self, x, y, and optionally a hash with URL, title, color, size, fill, and symbol
+#   By default, points are black empty circles, and the size is the radius
+#     Use symbol=""or "" fo rcircles; "+" or "x" for alternatives (fill is ignored for x or +)
 sub point {
   my $self = shift;
   my $xIn = shift;
@@ -188,18 +189,49 @@ sub point {
   my %options = (@_);
   my $x = $self->convertX($xIn);
   my $y = $self->convertY($yIn);
+  $self->pointAbsolute($x, $y, %options);
+}
+
+# Like point(), but with svg coordinates instead of plotting coordinates
+sub pointAbsolute {
+  my $self = shift;
+  my $x = shift;
+  my $y = shift;
+  my %options = (@_);
   my $size = $options{size} || 2;
   my $color = $options{color} || "black";
   my $fill = $options{fill} || "none";
-  my $out = qq{<circle cx="$x" cy="$y" r="$size" stroke="$color" fill="$fill"};
-  my $style = $options{style};
-  $out .= qq{ style="$style"} if defined $style && $style ne "";
-  $out .= ">";
+  my $symbol = $options{symbol} || "o";
+
+  my $titleTag = "";
   my $title = $options{title};
   if (defined $title && $title ne "") {
-    $out .= "<TITLE>" . encode_entities($title) . "</TITLE>";
+    $titleTag = "<TITLE>" . encode_entities($title) . "</TITLE>";
   }
-  $out .= "</circle>";
+
+  my $out = "";
+  if ($symbol eq "x" || $symbol eq "+") {
+    $out .= "<g>";
+    $out .= $titleTag;
+    $size *= $symbol eq "+" ? 1.6 : 1.25;
+    my @coords; # list of x1, x2, y1, y2
+    if ($symbol eq "x") {
+      push @coords, [ $x - $size, $x + $size, $y - $size, $y + $size ];
+      push @coords, [ $x + $size, $x - $size, $y - $size, $y + $size ];
+    } elsif ($symbol eq "+") {
+      push @coords, [ $x, $x, $y - $size, $y + $size ];
+      push @coords, [ $x - $size, $x + $size, $y, $y ];
+    }
+    foreach my $coord (@coords) {
+      my ($x1, $x2, $y1, $y2) = @$coord;
+      $out .= qq{<line x1="$x1" y1="$y1" x2="$x2" y2="$y2" stroke="$color" />};
+    }
+    $out .= "</g>";
+  } else {
+    $out .= qq{<circle cx="$x" cy="$y" r="$size" stroke="$color" fill="$fill">};
+    $out .= $titleTag;
+    $out .= "</circle>";
+  }
   my $URL = $options{URL};
   if (defined $URL && $URL ne "") {
     $URL = encode_entities($URL);
