@@ -178,7 +178,7 @@ sub genesSvg {
     my $y1 = $geneYMid - 3;
     my $dy = 6;
     push @svgLines,
-      qq{<rect x="$x1" width="$dx" y="$y1" height="$dy" stroke="none" fill-opacity=0><title>$distText</title></rect>};
+      qq{<rect x="$x1" width="$dx" y="$y1" height="$dy" stroke="none" fill-opacity="0"><title>$distText</title></rect>};
   }
   return (svg => join("\n", @svgLines) . "\n",
           xMax => int(0.99 + $xRight), yMax => int(0.5 + $yTop + $geneHeight + 8));
