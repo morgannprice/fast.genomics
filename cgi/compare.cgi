@@ -296,7 +296,7 @@ if ($taxLevel) { # taxon distribution mode
   print p("Showing which $taxonPlural{$taxLevel} have", $hitsString, $whatString . ".",
           "Genomes with",
           ($goodOnly ? "good homologs for" : ""),
-          ($taxMode eq "both" ? "both genes" : "the genes within 5 kb and on the same strand").":",
+          ($taxMode eq "both" ? "both genes" : "the genes within $closeKb kb and on the same strand").":",
           scalar(keys %gid1)."."), "\n";
   my $hidden2;
   if ($gene2){
@@ -661,7 +661,7 @@ if ($nInBoth > $nSame + 1) {
   my $below = 0.1; # space at the bottom of non-hits, so you can see them better
   my $plot = svgPlot->new(xRange => [-$below,1], yRange => [-$below,1],
                           width => 500, height => 500,
-                          margin => [3,3,2,2]);
+                          margin => [3,3,3,2]);
   my @ticks = (0,0.2,0.4,0.6,0.8,1.0);
   print qq{</TD><TD valign="top">};
   print $plot->start();
@@ -689,11 +689,11 @@ if ($nInBoth > $nSame + 1) {
   if (defined $thresh1) {
     my $x = $plot->convertX($thresh1/$max1);
     my $y = $plot->convertY($thresh2/$max2);
-    my $params = qq{ stroke="blue" stroke-dasharray="4" };
+    my $params = qq{ stroke="black" stroke-dasharray="4" };
     my $title = qq{The 'optimal' threshold, from maximizing -log(P)};
     print qq{<line x1="$x" y1="$y" x2="$x" y2="$plot->{drawTop}" $params ><title>$title</title></line>};
     print qq{<line x1="$x" y1="$y" x2="$plot->{drawRight}" y2="$y" $params ><title>$title</title></line>};
-    print qq{<text x="$plot->{drawRight}" y="$y" text-anchor="end" dominant-baseline="bottom" fill="blue"><title>$title</title>optimal</text>};
+    print qq{<text x="$plot->{drawRight}" y="$y" text-anchor="end" dominant-baseline="bottom" fill="black"><title>$title</title>optimal</text>};
   }
   my $max1Show = int(0.5 + $max1);
   my $max2Show = int(0.5 + $max2);
@@ -710,10 +710,25 @@ if ($nInBoth > $nSame + 1) {
                       title => "Score (bits) of best homolog of protein 2 / max ($max2Show bits)");
 
   # legend for color-coding, at top
-  my $top = $plot->{drawTop} + $plot->{lineSize};
-  my $x1 = $plot->convertX(0) + $plot->{lineSize} * 0.5;
-  print qq{<text x="$x1" y="$top" dominant-baseline="bottom" text-anchor="left"><tspan fill="green"><title>Within $closeKb kb and on the same strand</title>close</tspan> or not</text>};
-  print "\n";
+  my $top = $plot->{drawTop} - $plot->{lineSize} / 2;
+  my $labelLeft = $plot->convertX(0);
+  my $labelRight = $plot->convertX(0.8);
+  my $labelMid = ($labelLeft+$labelRight)/2;
+  my @labelX = ($labelLeft, $labelMid, $labelRight);
+  my @col = qw{green blue black};
+  my @fill = ("green", "blue", "#EEEEEE");
+  my @symbol = ("o", "+", "o");
+  my @labelTitles = ("Within $closeKb kb and on the same strand",
+                     "Both proteins have the same best hit",
+                     "The best hits are not near each other");
+  my @labels = ("close by", "same", "other");
+  foreach my $class (0..2) {
+    print $plot->pointAbsolute($labelX[$class] - 6, $top - $plot->{lineSize}/3,
+                               'size' => 2.5,
+                               'color' => $col[$class], 'fill' => $fill[$class], 'symbol' => $symbol[$class]);
+    print qq{<text x="$labelX[$class]" y="$top" text-anchor="left" alignment-baseline="center" fill="$col[$class]">},
+      qq{<title>$labelTitles[$class]</title>$labels[$class]</text>}, "\n";
+  }
 
   # points, with random moderately-negative value instead of 0
   srand(01312023);
@@ -730,13 +745,19 @@ if ($nInBoth > $nSame + 1) {
     my $lineage = join(" ",
                        $genome->{gtdbPhylum}, $genome->{gtdbClass}, $genome->{gtdbOrder},
                        $genome->{gtdbFamily});
+    my $title = join(" and ", @locusTags);
+    $title .= " (close by)" if $v->{close};
+    $title = $locusTags[0] . " (similar to both)" if $v->{same};
+    my $URL = addOrderToURL("genes.cgi?" .  join("&", map "g=$_", @locusTags));
+    $URL = addOrderToURL("gene.cgi?locus=$locusTags[0]") if $v->{same};
+    my $class = $v->{close} ? 0 : ($v->{same} ? 1 : 2);
     print $plot->point($x, $y,
                        size => 2.5,
-                       color => $v->{close} ? "green" : "black",
-                       fill => $v->{close} ? "green" : "none",
-                       URL => addOrderToURL("genes.cgi?" .  join("&", map "g=$_", @locusTags)),
-                       title => join(" and ", @locusTags)
-                       . " in " . $genome->{gtdbSpecies}
+                       color => $col[$class],
+                       fill => $fill[$class],
+                       symbol => $symbol[$class],
+                       URL => $URL,
+                       title => "$title in " . $genome->{gtdbSpecies}
                        . " ($lineage)"), "\n";
   }
   print $plot->end();
@@ -744,13 +765,13 @@ if ($nInBoth > $nSame + 1) {
 print "</TD></TR></TABLE>";
 
 my $downloadURL = "$baseURL&format=tsv";
-my $taxLevel = getOrder() eq "" ? "phylum" : "family";
+my $defaultTaxLevel = getOrder() eq "" ? "phylum" : "family";
 print
   p("Or see which taxa have",
-    a({-href => "$baseURL&taxLevel=${taxLevel}&taxMode=both"},
+    a({-href => "$baseURL&taxLevel=${defaultTaxLevel}&taxMode=both"},
       "both genes"),
     "or have",
-    a({-href => "$baseURL&taxLevel=${taxLevel}&taxMode=close"},
+    a({-href => "$baseURL&taxLevel=${defaultTaxLevel}&taxMode=close"},
       "the genes nearby,"),
     "or",
     a({ -href => $downloadURL }, "download a table"),
