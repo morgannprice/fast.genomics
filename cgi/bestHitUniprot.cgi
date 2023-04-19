@@ -9,6 +9,7 @@ use bestHitUniprot;
 # neighborWeb.pm relies on various PaperBLAST libraries
 use lib "../../PaperBLAST/lib";
 use neighborWeb;
+use pbweb qw{analysisLinks};
 
 # CGI arguments:
 # query (optional) -- an identifier or locus tag, or a sequence in fasta format
@@ -16,7 +17,8 @@ use neighborWeb;
 my $cgi = CGI->new;
 my $query = $cgi->param('query') || "";
 
-start_page('title' => "Find the best match in UniProt");
+start_page('title' => "Find the best match in UniProt",
+           'banner' => i("fast.genomics"));
 autoflush STDOUT 1; # show preliminary results
 
 my %query = parseGeneQuery($query);
@@ -68,4 +70,12 @@ print p(a({-href => "bestHitUniprot.cgi"}, "Try another query"));
 print p("Powered by", a({-href => $hit->{serviceURL}}, $hit->{service}))
   if exists $hit->{service};
 
+print
+  h3("Other sequence analysis tools"),
+  start_ul,
+  join("\t", map li($_), analysisLinks('desc' => $query{seqDesc},
+                                       'seq' => $query{seq},
+                                       'fbLoad' => 1,
+                                       'skip' => {"UniProt" => 1 })),
+  end_ul;
 finish_page();
