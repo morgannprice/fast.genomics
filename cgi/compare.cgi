@@ -662,7 +662,7 @@ if ($nInBoth > $nSame + 1) {
   my $below = 0.1; # space at the bottom of non-hits, so you can see them better
   my $plot = svgPlot->new(xRange => [-$below,1], yRange => [-$below,1],
                           width => 500, height => 500,
-                          margin => [3,3,3,2]);
+                          margin => [3,3,3,3]);
   my @ticks = (0,0.2,0.4,0.6,0.8,1.0);
   print qq{</TD><TD valign="top">};
   print $plot->start();
@@ -685,7 +685,7 @@ if ($nInBoth > $nSame + 1) {
     my $title = qq{The 'good' threshold (both score ratios >= 0.3)};
     print qq{<line x1="$x" y1="$y" x2="$x" y2="$plot->{drawTop}" $params ><title>$title</title></line>};
     print qq{<line x1="$x" y1="$y" x2="$plot->{drawRight}" y2="$y" $params ><title>$title</title></line>};
-    print qq{<text x="$plot->{drawRight}" y="$y" text-anchor="end" dominant-baseline="bottom" fill="orange"><title>$title</title>good</text>};
+    print qq{<text x="$plot->{drawRight}" y="$y" dominant-baseline="bottom" fill="orange"><title>$title</title>good</text>};
   }
   if (defined $thresh1) {
     my $x = $plot->convertX($thresh1/$max1);
@@ -694,7 +694,7 @@ if ($nInBoth > $nSame + 1) {
     my $title = qq{The 'optimal' threshold, from maximizing -log(P)};
     print qq{<line x1="$x" y1="$y" x2="$x" y2="$plot->{drawTop}" $params ><title>$title</title></line>};
     print qq{<line x1="$x" y1="$y" x2="$plot->{drawRight}" y2="$y" $params ><title>$title</title></line>};
-    print qq{<text x="$plot->{drawRight}" y="$y" text-anchor="end" dominant-baseline="bottom" fill="black"><title>$title</title>optimal</text>};
+    print qq{<text x="$plot->{drawRight}" y="$y" dominant-baseline="bottom" fill="black"><title>$title</title>optimal</text>};
   }
   my $max1Show = int(0.5 + $max1);
   my $max2Show = int(0.5 + $max2);
