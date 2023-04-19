@@ -22,7 +22,8 @@ use clusterBLASTp;
 
 our (@ISA,@EXPORT);
 @ISA = qw(Exporter);
-@EXPORT = qw{setOrder getOrder getSubDb addOrderToURL orderToHidden
+@EXPORT = qw{setQuietMode
+             setOrder getOrder getSubDb addOrderToURL orderToHidden
              getDbHandle getTopDbHandle getSubDbHandle
              hasHits getHits hitsFile getTopHitOrder
              moreGenomesInSubDb
@@ -38,6 +39,13 @@ our (@ISA,@EXPORT);
              capitalize
              geneHitsToProteinAlignment geneHitsToTree
              getSubDbHomologs};
+
+# In quiet mode, do not print explanations about what computations are being run,
+# or HTML comments (which might raise the risk of time outs)
+my $quietMode = 0;
+sub setQuietMode {
+  $quietMode = 1;
+}
 
 # If the order is set to non-empty, then getDbHandle() will return a subdb handle.
 # Otherwise, getDbHandle() will return the top-level handle.
@@ -168,14 +176,19 @@ sub saveMMSeqsHits($) {
   my $maxSeqs = int(1.5 * $nGenomes + 0.5);
   my $cmd = "../bin/searchSliced.pl -in $faaFile -sliced $mmseqsDb -out $tmpOut"
     . " -max-seq $maxSeqs -limit $nGenomes -db-load-mode 2 -s $mmseqsSens";
-  print CGI::p("Searching for similar proteins with mmseqs2",
-               CGI::small(runTimerHTML())), "\n";
-  runWhileCommenting($cmd) == 0
-    || die "Error running $cmd -- $!";
+  if ($quietMode) {
+    system($cmd) == 0 || die "Error running $cmd -- $!";
+  } else {
+    print CGI::p("Searching for similar proteins with mmseqs2",
+                 CGI::small(runTimerHTML())), "\n";
+    runWhileCommenting($cmd) == 0
+      || die "Error running $cmd -- $!";
+  }
   rename($tmpOut, $hitsFile) || die "Renaming $tmpOut to $hitsFile failed";
   unlink($faaFile);
   my $elapsed = tv_interval($startTime);
-  print CGI::p(sprintf("mmseqs2 finished in %.1f seconds", $elapsed))."\n";
+  print CGI::p(sprintf("mmseqs2 finished in %.1f seconds", $elapsed))."\n"
+    unless $quietMode;
 }
 
 # Given a subdb and a sequence, compute the homologs. Returns a reference to a list of hashes,
@@ -191,7 +204,7 @@ sub computeSubDbHomologs($) {
   my $formatdb = "../bin/blast/formatdb";
   die "No such executable: $formatdb" unless -x $formatdb;
 
-  print "<P><small>Running BLASTp.</small>\n";
+  print "<P><small>Running BLASTp.</small>\n" unless $quietMode;
   my $hits1 = runBLASTp('blastall' => $blastall, 'query' => $seq, 'db' => $clusterDb,
                         'eValue' => 1e-3, 'nCPUs' => 12);
   if (@$hits1 == 0) {
@@ -202,7 +215,8 @@ sub computeSubDbHomologs($) {
   }
 
   #else
-  print "<small>Processing " . scalar(@$hits1) . " clusters and re-running BLASTp.</small>\n";
+  print "<small>Processing " . scalar(@$hits1) . " clusters and re-running BLASTp.</small>\n"
+    unless $quietMode;
   my %clusterIds = map { $_->{subject} => 1 } @$hits1;
   my @clusterIds = sort keys %clusterIds;
   my $subDbh = getSubDbHandle();
@@ -210,15 +224,15 @@ sub computeSubDbHomologs($) {
   my ($nGenomes) = getDbHandle()->selectrow_array("SELECT COUNT(*) FROM Genome;");
   my $nMaxHits = max(int(1.5 * $nGenomes + 0.5), 200);
   splice @$proteinIds, $nMaxHits if scalar(@$proteinIds) > $nMaxHits;
-  print "<!-- expanded to " . scalar(@$proteinIds) . " -->\n";
+  print "<!-- expanded to " . scalar(@$proteinIds) . " -->\n" unless $quietMode;
   my $tmpPre = "/tmp/neighborWeb.$$";
   proteinsToFaa($proteinIds, "$tmpPre.faa", $subDbh);
-  print "<!-- fetched protein sequences -->\n";
+  print "<!-- fetched protein sequences -->\n" unless $quietMode;
   formatBLASTp($formatdb, "$tmpPre.faa");
   my ($dbSize) = $subDbh->selectrow_array("SELECT nClusteredAA FROM ClusteringInfo");
   my $hits = runBLASTp('blastall' => $blastall, 'query' => $seq, 'db' => "$tmpPre.faa",
             'eValue' => 1e-3, 'nCPUs' => 2, 'dbSize' => $dbSize);
-  print "<!-- ran BLASTp 2nd time -->\n";
+  print "<!-- ran BLASTp 2nd time -->\n" unless $quietMode;
   unlink("$tmpPre.faa");
   foreach my $suffix (qw{phr pin psq}) {
     unlink("$tmpPre.faa.$suffix");
@@ -314,7 +328,7 @@ sub parseGeneQuery($) {
             . encode_entities($genus) . " is not in this database")
       if @$genomes == 0;
     print "<p>Multiple genomes match " . encode_entities($genus) . " &mdash; searching just one</p>\n"
-      if @$genomes > 1;
+      if @$genomes > 1 && ! $quietMode;
     my $genome = $genomes->[0];
     my $wordQuery = join(" ", @parts);
     my $genes = $dbh->selectall_arrayref(qq{ SELECT * FROM Gene
@@ -364,7 +378,7 @@ sub hitsToGenes($) {
                                       { Slice => {} }, $proteinId);
     die "No genes for protein $proteinId" unless @$hg > 0;
     $n++;
-    print "<!-- protein hit $n -->\n" if $n % 20 == 0;
+    print "<!-- protein hit $n -->\n" if $n % 20 == 0 && ! $quietMode;
     foreach my $hitGene (@$hg) {
       while (my ($key,$value) = each %$hit) {
         $hitGene->{$key} = $value;
@@ -650,7 +664,8 @@ sub clusterGenes {
     close($fh) || die "Error reading $clusterFile";
   } else {
     my %proteinSeq = ();
-    print qq{<P id="ClusterInfo">Clustering the proteins for coloring...</P>}, "\n";
+    print qq{<P id="ClusterInfo">Clustering the proteins for coloring...</P>}, "\n"
+      unless $quietMode;
     foreach my $proteinId (keys %proteinToGenes) {
       my ($seq) = getDbHandle()->selectrow_array("SELECT sequence FROM Protein WHERE proteinId = ?",
                                                  {}, $proteinId);
@@ -671,7 +686,8 @@ sub clusterGenes {
     }
     close($fh) || die "Error writing to $tmpFile";
     rename($tmpFile, $clusterFile) || die "rename $tmpFile to $clusterFile failed";
-    print qq{<SCRIPT>document.getElementById("ClusterInfo").innerHTML = "";</SCRIPT>}, "\n";
+    print qq{<SCRIPT>document.getElementById("ClusterInfo").innerHTML = "";</SCRIPT>}, "\n"
+      unless $quietMode;
   }
 
   # convert protein clusters to gene clusters
@@ -816,7 +832,7 @@ sub geneHitsToProteinAlignment {
     }
     close($fhFaa) || die "Error writing to $faaFile\n";
     my $muscleOptions = "-maxiters 2 -maxmb 1000";
-    print "<P><small>Running muscle.</small></P>\n";
+    print "<P><small>Running muscle.</small></P>\n" unless $quietMode;
     my $cmd = "$muscle -quiet $muscleOptions < $faaFile > $tmpFile";
     system($cmd) == 0 || die "$cmd\nfailed: $!";
     rename($tmpFile, $alnFile) || die "Cannot rename to $tmpFile to $alnFile";
@@ -873,7 +889,7 @@ sub geneHitsToTree {
     close($fhAln) || die "Error writing to $alnFile\n";
     my $tmpFile = "$treeFile.tmp";
     my $cmd = "$fastTree -quiet < $alnFile > $tmpFile";
-    print "<P><small>Running FastTree.</small></P>\n";
+    print "<P><small>Running FastTree.</small></P>\n" unless $quietMode;
     system($cmd) == 0 || die "$cmd\nfailed: $!\n";
     rename($tmpFile, $treeFile) || die "Cannot rename to $tmpFile to $treeFile";
     unlink($alnFile);

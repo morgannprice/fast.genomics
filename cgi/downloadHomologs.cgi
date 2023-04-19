@@ -15,6 +15,7 @@ use neighborWeb;
 # order (optional)
 
 my $cgi = CGI->new;
+neighborWeb::setQuietMode();
 setOrder(param('order'));
 
 my ($gene, $seqDesc, $seq) = getGeneSeqDesc($cgi);

@@ -71,6 +71,7 @@ unless (hasHits($seq)) {
 my $format = $cgi->param('format') || "";
 $format = "" unless $format eq "fasta" || $format eq "tsv" || $format eq "newick" || $format eq "svg";
 $format = "" unless hasHits($seq);
+neighborWeb::setQuietMode() unless $format eq "";
 
 if ($format eq "") {
   my $title = getOrder() eq "" ? "Homologs of "

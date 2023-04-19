@@ -38,6 +38,7 @@ my $closeNt = $closeKb * 1000;
 my $cgi = CGI->new;
 setOrder(param('order'));
 my $tsv = ($cgi->param('format') || "") eq  'tsv';
+neighborWeb::setQuietMode() if $tsv;
 my ($gene, $seqDesc, $seq) = getGeneSeqDesc($cgi);
 my $options = geneSeqDescSeqOptions($gene,$seqDesc,$seq); # for 1st gene
 my $hidden = geneSeqDescSeqHidden($gene,$seqDesc,$seq); # for 1st gene
