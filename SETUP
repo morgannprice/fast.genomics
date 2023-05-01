@@ -46,3 +46,7 @@ neighbor.faa.gz (created by the bin/buildSubDbs.pl script).
 
 Optionally, use the motd file to show a "message of the data" at the
 top of the main page and some other pages.
+
+For the tblastn feature of the blastGenome.cgi to work, the fasta
+files for the genome sequences must be in ind/refseq_{gid}.fna (these
+will be created by fetchAssemblies.pl if the directories line up).
