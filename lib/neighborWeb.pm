@@ -598,7 +598,7 @@ sub getGeneSeqDesc($) {
   }
   #else
   my $seqDesc = $cgi->param('seqDesc');
-  die "Must specify seqDesc if no locus" unless defined $seqDesc && $seqDesc ne "";
+  die "Must specify seqDesc if no locus" unless defined $seqDesc;
   my $seq = $cgi->param('seq') || die "Must specify seq if no locus";
   $seq =~ m/^[A-Z]+$/ || die "Invalid sequence";
   return (undef, $seqDesc, $seq);
