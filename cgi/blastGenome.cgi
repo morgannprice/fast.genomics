@@ -88,7 +88,7 @@ if (defined $queryGene) {
   $seq = $query{seq};
   $seq =~ s/[*]//g;
   $seq =~ m/^[a-zA-Z]+$/ || die("Sorry, input sequence has invalid characters");
-  my $seqDesc = $query{seqDesc}
+  $seqDesc = $query{seqDesc}
     || length($seq) . " a.a. beginning with " . substr($seq, 0, 10);
 }
 
@@ -139,7 +139,7 @@ if ($format eq "") {
 }
 
 my $qLen = length($seq);
-my @geneHits = (); # the hit genes, and the extents within the gene
+my @geneHits = (); # the hit genes, and the alignment extents (saved in sBegin/sEnd/qBegin/qEnd)
 if (@aaHits > 0) {
   print qq{<TABLE cellpadding=2 cellspacing=2>},
     Tr(th([ "locus",  "description",
@@ -156,6 +156,8 @@ if (@aaHits > 0) {
     my ($geneHit) = @$genes;
     $geneHit->{sBegin} = $sBeg;
     $geneHit->{sEnd} = $sEnd;
+    $geneHit->{qBegin} = $qBeg;
+    $geneHit->{qEnd} = $qEnd;
     push @geneHits, $geneHit;
     my $sLen = length($geneHit->{sequence});
     print Tr({-bgcolor => $iRow % 2 == 1 ? "white" : "lightgrey"},
@@ -258,6 +260,7 @@ if (!-e $fnaFile) {
                a({-title => '%coverage of query'}, "cov."),
                "overlapping genes"])), "\n";
       my $iRow = 0;
+      my %hitLocusTag = map { $_->{locusTag} => $_ } @geneHits;
       foreach my $ntHit (@ntOnlyHits) {
         my (undef, $scaffoldId, $identity, $alen, $mm, $gap, $qBeg, $qEnd, $sBeg, $sEnd, $evalue, $bits) = @$ntHit;
         my $strand = $sBeg < $sEnd ? "+" : "-";
@@ -266,11 +269,22 @@ if (!-e $fnaFile) {
           . " ORDER BY begin" . ($strand eq "+" ? "" : " DESC"),
           { Slice => {} },
           $gid, $scaffoldId, max($sBeg, $sEnd), min($sBeg, $sEnd));
-        my @showOverlap = map a({-href => addOrderToURL("gene.cgi?locus=" . $_->{locusTag}),
-                                 -title => encode_entities($_->{desc})
-                                 . ($_->{proteinId} eq "" ? " (not protein-coding)" : ""),
-                                 -style => "text-decoration: none;"},
-                                $_->{locusTag}), @$overlapping;
+        my @showOverlap = ();
+        foreach my $o (@$overlapping) {
+          my $locus = $o->{locusTag};
+          my $showOverlap = a({-href => addOrderToURL("gene.cgi?locus=$locus"),
+                               -title => encode_entities($o->{desc})
+                               . ($o->{proteinId} eq "" ? " (not protein-coding)" : ""),
+                               -style => "text-decoration: none;"},
+                              $locus);
+          if (exists $hitLocusTag{$locus}) {
+            my $aaHit = $hitLocusTag{$locus};
+            $showOverlap .= " " . small(a({-title => "tblastn aligned to $qBeg:$qEnd of query"
+                                           . " instead of $aaHit->{qBegin}:$aaHit->{qEnd}"},
+                                          "above"));
+          }
+          push @showOverlap, $showOverlap;
+        }
         print Tr({-bgcolor => $iRow % 2 == 1 ? "white" : "lightgrey"},
                  td({-valign => "top", -align => "left"}, $scaffoldId),
                  td({-valign => "top", -align => "center"}, $strand),
