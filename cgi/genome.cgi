@@ -103,6 +103,7 @@ print p("Scaffolds:", commify($nScaffolds),
 
 print
   h3("Tools"),
+  p(a({-href => addOrderToURL("blastGenome.cgi?gid=$gid")}, "BLAST")),
   start_form(-name => 'search', -method => 'GET', -action => 'genomeSearch.cgi'),
   qq{<INPUT type="hidden" name="gid" value="$gid" />},
   orderToHidden(),
