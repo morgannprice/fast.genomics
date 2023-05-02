@@ -121,6 +121,7 @@ sub getSequenceDb {
 
 sub hasHits($) {
   my ($seq) = @_;
+  return 0 if $ENV{RECOMPUTE};
   my $seqDb = getSequenceDb();
   $seqDb .= ".pin" if defined getSubDb();
   return NewerThan(hitsFile($seq), $seqDb);
@@ -930,9 +931,10 @@ sub moreGenomesInSubDb($$$) {
   my $nSubGenomes;
   if ($taxLevel eq "order") {
     return 0 unless $subDb eq $taxon;
-    $nSubGenomes = getDbHandle()->selectrow_array(
+    ($nSubGenomes) = getDbHandle()->selectrow_array(
       qq{SELECT nGenomes FROM SubDb WHERE taxon = ? },
       {}, $taxon);
+    $nSubGenomes =  0 if !defined $nSubGenomes;
   } else {
     return 0 unless $taxLevel eq "family" || $taxLevel eq "genus" || $taxLevel eq "species";
     # find the relevant order
