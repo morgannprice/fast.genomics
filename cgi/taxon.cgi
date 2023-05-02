@@ -109,7 +109,7 @@ print "\n";
 
 print p(start_form(-name => 'input', -method => 'GET', -action => 'findTaxon.cgi'),
         orderToHidden(),
-        "Or find taxon",
+        "Find another taxon:",
         textfield(-name => 'query', -size => 20, -maxlength => 1000, -value => ''),
         submit('Search'),
         end_form);
@@ -141,6 +141,6 @@ if (@$children > 0) {
   print "</TABLE>";
   print p({-style => "font-size:smaller;"},
           "Only taxa that have high-quality genomes are included in <i>fast.genomics</i>.",
-          getOrder() ne "" ? "A limit of genomes per species are included." : "");
+          getOrder() ne "" ? "A limit of 10 genomes per species are included." : "");
 }
 finish_page();
