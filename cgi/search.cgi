@@ -242,12 +242,17 @@ if (defined $query{genes}) {
       print p(a({href => addOrderToURL("gene.cgi?locus=$locusTag")}, $locusTag),
               $gene->{proteinId}, $gene->{desc});
     }
+    # If this is a multi-word query, remove the first word (presumably the genus)
+    # and link to curated BLAST
     my $query2 = $query; $query2 =~ s/^\S+\s+//; $query2 =~ s/\s+$//;
-    my $curatedURL = "https://papers.genomics.lbl.gov/cgi-bin/genomeSearch.cgi?gdb=NCBI"
-      . "&gid=${gid}&query=" . uri_escape($query2);
-    print p("Or search for", encode_entities($query2),
-            "in $genome->{gtdbSpecies} $genome->{strain} using",
-            a({-href =>  $curatedURL }, "Curated BLAST"));
+    # show link to curated BLAST unless this looks like a locus tag query
+    if ($query2 ne "") {
+      my $curatedURL = "https://papers.genomics.lbl.gov/cgi-bin/genomeSearch.cgi?gdb=NCBI"
+        . "&gid=${gid}&query=" . uri_escape($query2);
+      print p("Or search for", encode_entities($query2),
+              "in $genome->{gtdbSpecies} $genome->{strain} using",
+              a({-href =>  $curatedURL }, "Curated BLAST"));
+    }
   } else {
     print p("Found", scalar(@$genes), " matches");
     foreach my $gene (@$genes) {
