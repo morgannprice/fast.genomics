@@ -61,7 +61,10 @@ sub setOrder($) {
     $memOrder = $order;
     my ($prefix) = getTopDbHandle()->selectrow_array("SELECT prefix FROM SubDb WHERE taxon = ?",
                                                      {}, $memOrder);
-    die "Order $order has no subdb" unless defined $prefix;
+    die "Sorry, order $order has no sub-database.\n"
+      . "It's possible that your taxon of interest has been reclassified.\n"
+      . "Try searching for it at fast.genomics.lbl.gov or at gtdb.ecogenomic.org.\n"
+        unless defined $prefix;
     $memSubDb = $prefix;
     die "Invalid prefix $prefix" unless $prefix =~ m/^[a-zA-Z0-9._-]+$/;
   }

@@ -37,10 +37,24 @@ start_page('title' => "Taxon search");
 if (@$taxList == 0 && $query ne "") {
   my $message = "Sorry, no matching taxa were found for "
     . q{"} . encode_entities($query) . q{".};
-  $message .= " Search the "
-    . a({-href => "findTaxon.cgi?query=" . uri_escape($query)}, "main database")
-    . " instead."
-      if getOrder() ne "";
+  if (getOrder eq "") {
+    my $genus = $query; $genus =~ s/\s.*//;
+    $message .= " Try searching for "
+      . a({-href => "findTaxon.cgi?query=" . uri_escape($genus)}, encode_entities($genus))
+      . " instead. (Many species are included only in the order-specific sub-databaases.)"
+        if $query =~ m/\s/;
+  } else {
+    $message .= " Search the "
+      . a({-href => "findTaxon.cgi?query=" . uri_escape($query)}, "main database")
+        . " instead.";
+  }
+  $message .= join(" ",
+                   " Or search",
+                   a({ -href => "https://gtdb.ecogenomic.org/searches?s=al&q=".uri_escape($query),
+                       -title => "Genome Taxonomy Database"}, "GTDB"),
+                   "or",
+                   a({ -href => "https://www.ncbi.nlm.nih.gov/taxonomy/?term=".uri_escape($query) },
+                     "NCBI's taxonomy") . ".");
   print p($message), "\n";
 }
 
@@ -61,7 +75,7 @@ if (@$taxList > 0) {
 }
 
 print p({-style => "font-size:smaller;"},
-        "Only taxa that have high-quality genomes are included in <i>fast.genomics</i>")
+        "Only taxa that have high-quality genomes are included in <i>fast.genomics</i>.")
   if $query ne "";
 
 print p(start_form(-name => 'input', -method => 'GET', -action => 'findTaxon.cgi'),

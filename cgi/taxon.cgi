@@ -26,10 +26,40 @@ my $taxon = $cgi->param('taxon') || die "Must specify taxon";
 my $level = $cgi->param('level') || die "Must specify level";
 my $taxObj = getDbHandle()->selectrow_hashref("SELECT * FROM Taxon WHERE taxon = ? AND level = ?",
                                               {}, $taxon, $level);
-die "Unknown taxon" unless defined $taxObj;
+if (!defined $taxObj && getOrder ne "") {
+  # Look for this taxon in the main database
+  $taxObj = getTopDbHandle()->selectrow_hashref("SELECT * FROM Taxon WHERE taxon = ? AND level = ?",
+                                              {}, $taxon, $level);
+  if (defined $taxObj) {
+    # forward to the main database page
+    print redirect(-url => "taxon.cgi?level=$level&taxon=$taxon");
+    exit(0);
+  }
+}
 
 start_page('title' => capitalize($level) . " " . encode_entities($taxon));
 autoflush STDOUT 1; # show preliminary results
+
+if (!defined $taxObj) {
+  # show links to NCBI and GTDB taxonomy search
+  print p("Sorry,", encode_entities($level), encode_entities($taxon),
+          "is not in this database. You can try searching for this taxon at",
+          a({ -href => "https://gtdb.ecogenomic.org/searches?s=al&q=".uri_escape($taxon),
+             -title => "Genome Taxonomy Database"}, "GTDB"),
+          "or",
+        a({ -href => "https://www.ncbi.nlm.nih.gov/taxonomy/?term=".uri_escape($taxon) },
+          "NCBI's taxonomy"));
+  print p(start_form(-name => 'input', -method => 'GET', -action => 'findTaxon.cgi'),
+          orderToHidden(),
+          "Find another taxon:",
+          textfield(-name => 'query', -size => 20, -maxlength => 1000, -value => ''),
+          submit('Search'),
+          end_form);
+  finish_page();
+}
+
+die "Unknown taxon" unless defined $taxObj;
+
 my $taxa = getTaxa();
 my $levelToParent = taxToParts($taxObj, $taxa);
 my @taxLevels = taxLevels();
