@@ -311,9 +311,13 @@ if (!-e $fnaFile) {
 } # end if have nt sequence
 
 unlink("$tmpPre.faa");
+unlink("$tmpPre.db");
 unlink("$tmpPre.hits");
 unlink("$tmpPre.fna");
-foreach my $suffix (qw{nhr nin nsq phr pin psq}) {
+foreach my $suffix (qw{nhr nin nsq}) {
   unlink("$tmpPre.fna.$suffix");
+}
+foreach my $suffix (qw{phr pin psq}) {
+  unlink("$tmpPre.db.$suffix");
 }
 finish_page();
