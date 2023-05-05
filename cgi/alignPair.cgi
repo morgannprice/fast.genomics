@@ -15,6 +15,7 @@ use neighborWeb;
 # CGI arguments:
 # locus (a locus tag in the database), or, seqDesc and seq
 # locus2, or, seq2 and seqDesc2
+#   (and optionally the order)
 
 my $cgi = CGI->new;
 setOrder(param('order'));
