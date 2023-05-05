@@ -34,6 +34,14 @@ CREATE INDEX 'GenomeStrain' ON Genome (strain);
 CREATE INDEX 'GenomeAcc' ON Genome (gtdbAccession);
 CREATE INDEX 'GenomeAssembly' ON Genome (assemblyName);
 
+CREATE TABLE Scaffold (
+  gid TEXT NOT NULL,
+  scaffoldId TEXT NOT NULL,
+  scaffoldDesc TEXT NOT NULL,
+  length INT NOT NULL,
+  PRIMARY KEY (gid, scaffoldId)
+);
+
 CREATE TABLE Gene (
   gid TEXT NOT NULL,
   scaffoldId TEXT NOT NULL,

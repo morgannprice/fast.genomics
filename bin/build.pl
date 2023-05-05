@@ -74,7 +74,7 @@ if (!defined $test) {
 print STDERR "Reading genomes\n" unless $quiet;
 
 # As we read the genomes, write to the tables
-my @tables = qw{Genome Gene Protein Taxon};
+my @tables = qw{Genome Gene Protein Taxon Scaffold};
 my %files = map { $_ => "$outDir/neighbor_" . $_ . ".tab" } @tables;
 my %fh = ();
 foreach my $table (@tables) {
@@ -100,6 +100,8 @@ foreach my $row (@genomes) {
   my $gid = $fetchToGid{$fetch};
   my $faaIn = "$inDir/refseq_${gid}.faa";
   die "No faa file for $gid: $faaIn\n" unless -e $faaIn;
+  my $fnaFile = "$inDir/refseq_${gid}.fna";
+  die "No fna file for $gid: $fnaFile\n" unless -e $fnaFile;
 
   my $featureFile = "$inDir/refseq_${gid}.features.tab";
   die "No feature table for $gid: $featureFile\n" unless -e $featureFile;
@@ -121,6 +123,19 @@ foreach my $row (@genomes) {
     $protSeen{$proteinId} = 1;
   }
   close($fhIn) || die "Error reading $faaIn";
+
+  open (my $fhFna, "<", $fnaFile) || die "Cannot read $fnaFile";
+  $state = {};
+  while (my ($header,$seq) = ReadFastaEntry($fhFna, $state)) {
+    my $scaffoldId = $header;
+    my $scaffoldDesc = "";
+    if ($header =~ m/^(\S+) (.*)$/) {
+      $scaffoldId = $1;
+      $scaffoldDesc = $2;
+    }
+    print { $fh{Scaffold} } join("\t", $gid, $scaffoldId, $scaffoldDesc, length($seq))."\n";
+  }
+  close($fhFna) || die "Error reading $fnaFile";
 
   my $nGenes = scalar(@$genes);
   my $nGenesWithProteins = 0;
@@ -201,6 +216,7 @@ foreach my $table (@tables) {
 }
 print SQLITE <<END
 SELECT 'nGenomes', COUNT(*) FROM Genome;
+SELECT 'nScaffold', COUNT(*) FROM Scaffold;
 SELECT 'nGenes', COUNT(*) FROM Gene;
 SELECT 'nProteinGenes', COUNT(*) FROM Gene WHERE proteinId <> "";
 SELECT 'nProteins', COUNT(*) FROM Protein;
