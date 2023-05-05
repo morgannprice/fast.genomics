@@ -190,10 +190,17 @@ END
 END
       ;
   }
-  print <<END
-<TR style="background-color: lightyellow;"><TD>Database date</TD><TD align="right">$dbDate</TD></TR>
+  print qq{<TR style="background-color: lightyellow;"><TD>Database date</TD><TD align="right">$dbDate</TD></TR>},
+    "\n";
+  my $gtdbVersionFile = "../data/gtdb.version";
+  if (-e $gtdbVersionFile) {
+    my $gtdbVersion = `cat $gtdbVersionFile`;
+    chomp $gtdbVersion;
+    print qq{<TR style="background-color:lightgrey;"><TD>GTDB version</TD><TD align="left">$gtdbVersion</TD></TR>},
+      "\n";
+  }
+print <<END
 </TABLE>
-
 
 <H3>Downloads for the main database</H3>
 
