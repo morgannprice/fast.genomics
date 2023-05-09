@@ -34,6 +34,38 @@ CREATE INDEX 'GenomeStrain' ON Genome (strain);
 CREATE INDEX 'GenomeAcc' ON Genome (gtdbAccession);
 CREATE INDEX 'GenomeAssembly' ON Genome (assemblyName);
 
+/* This table is only built for the top-level database.
+   It indicates if a genome is present in the top-level database or not,
+   and which SubDB prefix it is in, if any */
+CREATE TABLE AllGenome (
+  gid TEXT PRIMARY KEY, /* assemblyId in the downloaded tables */
+  gtdbDomain TEXT NOT NULL,
+  gtdbPhylum TEXT NOT NULL,
+  gtdbClass TEXT NOT NULL,
+  gtdbOrder TEXT NOT NULL,
+  gtdbFamily TEXT NOT NULL,
+  gtdbGenus TEXT NOT NULL,
+  gtdbSpecies TEXT NOT NULL,
+  strain TEXT NOT NULL,
+  gtdbAccession TEXT NOT NULL,
+  assemblyName TEXT NOT NULL,
+  ncbiTaxonomy TEXT NOT NULL,
+  nGenes INT NOT NULL,
+  nProteins INT NOT NULL, /* #protein-coding genes */
+  inTop INT NOT NULL,
+  prefix TEXT NOT NULL /* the subdb; empty if not in a subdb */
+);
+CREATE INDEX 'AllGenomeDomain' ON AllGenome (gtdbDomain);
+CREATE INDEX 'AllGenomePhylum' ON AllGenome (gtdbPhylum);
+CREATE INDEX 'AllGenomeClass' ON AllGenome (gtdbClass);
+CREATE INDEX 'AllGenomeOrder' ON AllGenome (gtdbOrder);
+CREATE INDEX 'AllGenomeFamily' ON AllGenome (gtdbFamily);
+CREATE INDEX 'AllGenomeGenus' ON AllGenome (gtdbGenus);
+CREATE INDEX 'AllGenomeSpecies' ON AllGenome (gtdbSpecies);
+CREATE INDEX 'AllGenomeStrain' ON AllGenome (strain);
+CREATE INDEX 'AllGenomeAcc' ON AllGenome (gtdbAccession);
+CREATE INDEX 'AllGenomeAssembly' ON AllGenome (assemblyName);
+
 CREATE TABLE Scaffold (
   gid TEXT NOT NULL,
   scaffoldId TEXT NOT NULL,
