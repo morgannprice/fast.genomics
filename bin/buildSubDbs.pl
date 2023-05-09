@@ -12,7 +12,6 @@ my $nCPUs = $ENV{MC_CORES} || (`egrep -c '^processor' /proc/cpuinfo`);
 
 my $minCoverage = 0.9;
 my $minIdentity = 0.7;
-my $nSlices = 4;
 
 my $usage = <<END
 ./buildSubDbs.pl -genomes genomes.tsv [ -fetched genomes.tsv.fetched ] -in indir -out outdir
@@ -31,7 +30,6 @@ More arguments (optional):
 -minCoverage $minCoverage -- minimum alignment coverage (both ways)
   for the cluster seed and the sequence
 -minIdentity $minIdentity -- minimum fractional identity to cluster
--nSlices -- number of slices to use for mmseqs databases
 END
 ;
 
@@ -43,8 +41,7 @@ die $usage
                     'out=s' => \$outDir,
                     'nCPUs=i' => \$nCPUs,
                     'minCoverage=f' => \$minCoverage,
-                    'minIdentity=f' => \$minIdentity,
-                    'slices=i' => \$nSlices)
+                    'minIdentity=f' => \$minIdentity)
   && defined $genomeFile
   && defined $inDir
   && defined $outDir
@@ -53,7 +50,6 @@ $fetchedFile = "$genomeFile.fetched" if !defined $fetchedFile;
 
 die "minCoverage is out of range\n" unless $minCoverage <= 1;
 die "minIdentity is out of range\n" unless $minIdentity >= 0.5 && $minIdentity <= 1;
-die "slices is out of range\n" unless $nSlices >= 1 && $nSlices <= 100;
 
 my $cdhit = "$RealBin/cd-hit";
 die "No such executable: $cdhit\n" unless -x $cdhit;
@@ -154,7 +150,7 @@ foreach my $order (sort keys %orderToGenomes) {
   # Remove higher level taxa from Taxon
   print $fhSql qq{DELETE FROM Taxon WHERE level NOT IN ("order","family","genus","species");\n};
   close($fhSql) || die "Error loading database: $!";
-  # Add the clusters ot the database
+  # Add the clusters to the database
   clusteringIntoDb($clusters, $dbFile);
   foreach my $table (qw{Genome Gene Protein ClusterProtein ClusteringInfo Taxon}) {
     unlink("$orderDir/neighbor_${table}.tab");
@@ -171,6 +167,8 @@ To load it into neighbor.db use
 .mode tabs
 DELETE FROM SubDb;
 .import $tabFile SubDb
+
+And then run buildAllGenome.pl
 END
   ;
 print STDERR "buildSubDbs.pl done\n";
