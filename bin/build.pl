@@ -143,7 +143,7 @@ foreach my $row (@genomes) {
     my $locusTag = $gene->{locusTag};
     die "locus tag $locusTag is in $gid and in $locusSeen{$locusTag}\n"
       if exists $locusSeen{$locusTag};
-    $locusSeen{$locusTag} = 1;
+    $locusSeen{$locusTag} = $gid;
     my $proteinId = $gene->{proteinId};
     if ($proteinId ne "" & !exists $protSeen{$proteinId}) {
       print STDERR join("\t", "Warning", $gid, "unknown protein $proteinId in feature file")."\n";
