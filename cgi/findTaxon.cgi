@@ -27,10 +27,16 @@ $query =~ s/\s+$//;
 if ($query =~ m/^GC[A-Z]_\d+[.]?\d*$/i) {
   # search for this assembly
   $query = uc($query);
-  $query =~ s/[.]?\d*$//;
+  $query =~ s/[.]\d*$//; # remove version number, if any
+  my $query2 = $query;
+  if ($query =~ m/^GCA/) {
+    $query2 =~ s/^GCA/GCF/;
+  } else {
+    $query2 =~ s/^GC[A-Z]/GCA/;
+  }
   my $genomes = getTopDbHandle()->selectall_arrayref(
-    "SELECT * from AllGenome WHERE gid LIKE ?",
-    { Slice => {} }, $query . "%");
+    "SELECT * from AllGenome WHERE gid LIKE ? OR gid LIKE ?",
+    { Slice => {} }, $query . "%", $query2 . "%");
   if (@$genomes == 1) {
     my $genome = $genomes->[0];
     my $subdbSpec = "";
