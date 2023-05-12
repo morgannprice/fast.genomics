@@ -27,11 +27,11 @@ die "Unknown gid" unless defined $genome;
 
 my $format = $cgi->param('format') || "";
 
+my $genes = getDbHandle()->selectall_arrayref(qq{ SELECT * FROM Gene WHERE gid = ? },
+                                              { Slice => {} }, $gid);
 if ($format eq "tsv") {
   print "Content-Type:text/tab-separated-values\n";
   print "Content-Disposition: attachment; filename=genes_$gid.tsv\n\n";
-  my $genes = getDbHandle()->selectall_arrayref(qq{ SELECT * FROM Gene WHERE gid = ? },
-                                                { Slice => {} }, $gid);
   my @col = qw{scaffoldId begin end strand locusTag proteinId desc};
   print join("\t", @col)."\n";
   foreach my $gene (@$genes) {
@@ -87,21 +87,25 @@ print p("NCBI taxonomy:",
                     -style => "text-decoration: none;"},
                    encode_entities($_)), @ncbi));
 
-my ($nScaffolds) = getDbHandle()->selectrow_array("SELECT COUNT(DISTINCT scaffoldId) FROM Gene WHERE gid = ?",
-                                                  {}, $gid);
-print p("Scaffolds:", commify($nScaffolds),
-        "Genes:",
-        a({-href => addOrderToURL("genome.cgi?gid=$gid&format=tsv"),
-           -title => "tab-delimited table",
-           -style => "text-decoration: none;"},
-          commify($genome->{nGenes})),
-        "Protein-coding:",
-        a({-href => addOrderToURL("genome.cgi?gid=$gid&format=faa"),
-           -title => "fasta protein sequences",
-           -style => "text-decoration: none;"},
-          commify($genome->{nProteins})));
-
+my $scaffolds = getDbHandle()->selectall_arrayref(
+  "SELECT * FROM Scaffold WHERE gid = ?",
+  { Slice => {} }, $gid);
+my @pseudos = grep { $_->{desc} =~ m/pseudo/i && $_->{proteinId} eq "" } @$genes;
+my @RNAs = grep { $_->{desc} !~ m/pseudo/i && $_->{proteinId} eq "" } @$genes;
 print
+  p("Scaffolds:", commify(scalar(@$scaffolds))),
+  p("Genes:",
+    a({-href => addOrderToURL("genome.cgi?gid=$gid&format=tsv"),
+       -title => "tab-delimited table",
+       -style => "text-decoration: none;"},
+      commify($genome->{nGenes})),
+    "Protein-coding:",
+    a({-href => addOrderToURL("genome.cgi?gid=$gid&format=faa"),
+       -title => "fasta protein sequences",
+       -style => "text-decoration: none;"},
+      commify($genome->{nProteins})),
+    "RNAs:", scalar(@RNAs),
+    "pseudogenes:", scalar(@pseudos)),
   h3("Tools"),
   p(a({-href => addOrderToURL("blastGenome.cgi?gid=$gid")}, "BLAST")),
   start_form(-name => 'search', -method => 'GET', -action => 'genomeSearch.cgi'),
@@ -136,6 +140,24 @@ print
     a({-href => "https://papers.genomics.lbl.gov/cgi-bin/gapView.cgi?gdb=NCBI&gid=$gid&set=carbon"},
       "carbon catabolism"),
     span({-style => "font-size: 80%;"}, "(takes 10-40 seconds)")
-   );
+   ),
+  "\n";
 
+print
+  h3("Scaffolds"),
+  "<TABLE cellpadding=2 cellspacing=2>",
+  Tr(th(["scaffoldId","description","length"])),
+  "\n";
+my $iRow = 0;
+foreach my $scaffold (@$scaffolds) {
+  print Tr({ -bgcolor => $iRow++ % 2 == 1 ? "white" : "lightgrey" },
+           td({-valign => "top", -align => "left"},
+              a({-href => "https://www.ncbi.nlm.nih.gov/nuccore/".$scaffold->{scaffoldId},
+                 -style => "text-decoration: none;"},
+                $scaffold->{scaffoldId})),
+           td({-valign => "top", -align => "left"}, encode_entities($scaffold->{scaffoldDesc})),
+           td({-valign => "top", -align => "right"}, commify($scaffold->{length}))),
+             "\n";
+}
+print "<\TABLE>\n";
 finish_page();
