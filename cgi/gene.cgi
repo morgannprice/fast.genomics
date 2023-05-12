@@ -70,7 +70,12 @@ my $showBegin2 =  max(1, min($gene->{begin} - 2000, $center - 8000));
 my $showEnd2 = max($gene->{end} + 2000, $center + 8000);
 my $ncbiBrowser = "https://www.ncbi.nlm.nih.gov/nuccore/$gene->{scaffoldId}?report=graph"
                  . "&from=$showBegin&to=$showEnd";
-push @lines, "Location: " . $gene->{scaffoldId} . " "
+my $scaffold = getDbHandle()->selectrow_hashref("SELECT * from Scaffold WHERE scaffoldId = ?",
+                                                {}, $gene->{scaffoldId});
+push @lines, "Location: "
+  . a({-title => $scaffold->{scaffoldDesc}, -style => "text-decoration: none;"},
+      $gene->{scaffoldId})
+  . " "
   . a({-href => $ncbiBrowser, -title => "NCBI browser"},
       $gene->{begin} . ":" . $gene->{end})
   . " ($gene->{strand})";
@@ -93,6 +98,7 @@ my %genesSvg = genesSvg(\@showGenes,
                         'kbWidth' => $kbWidth,
                         'begin' => $showBegin, 'end' => $showEnd,
                         'yTop' => 5,
+                        'scaffoldLength' => $scaffold->{length},
                         'showLabel' => 1);
 my %scaleBarSvg = scaleBarSvg('xLeft' => $genesSvg{xMax} * 0.8,
                               'yTop' => $genesSvg{yMax} + 5);
