@@ -14,7 +14,7 @@ use neighborWeb;
 use pbweb qw{commify};
 
 # optional CGI arguments:
-# query -- which taxon to search for
+# query -- which taxon or strain to search for
 # order -- which subdb to use
 
 my $cgi = CGI->new;
@@ -24,8 +24,72 @@ $query = "" if !defined $query;
 $query =~ s/^\s+//;
 $query =~ s/\s+$//;
 
-my $taxList = getDbHandle()->selectall_arrayref("SELECT * from Taxon WHERE taxon LIKE ?",
+if ($query =~ m/^GC[A-Z]_\d+[.]?\d*$/i) {
+  # search for this assembly
+  $query = uc($query);
+  $query =~ s/[.]?\d*$//;
+  my $genomes = getTopDbHandle()->selectall_arrayref(
+    "SELECT * from AllGenome WHERE gid LIKE ?",
+    { Slice => {} }, $query . "%");
+  if (@$genomes == 1) {
+    my $genome = $genomes->[0];
+    my $subdbSpec = "";
+    $subdbSpec = "&order=" . $genome->{prefix} unless $genome->{inTop};
+    print redirect(-url => "genome.cgi?gid=". $genome->{gid} . $subdbSpec);
+    exit(0);
+  }
+}
+
+my $taxList = getDbHandle()->selectall_arrayref("SELECT * from Taxon WHERE taxon LIKE ? LIMIT 200",
                                                 {Slice => {} }, $query);
+
+if (@$taxList == 0 && getOrder() ne "" && $query ne "") {
+  # Try searching in top-level database?
+  $taxList = getTopDbHandle()->selectall_arrayref("SELECT * from Taxon WHERE taxon LIKE ? LIMIT 200",
+                                                {Slice => {} }, $query);
+  if (@$taxList > 0) {
+    # forward to the top-level database
+    print redirect(-url => "findTaxon.cgi?query=".uri_escape($query));
+    exit(0);
+  }
+}
+
+if (@$taxList == 0 && getOrder() eq "" && $query ne "") {
+  # Search in AllGenome for this species? Put in-top genomes first
+  my $genomes = getTopDbHandle()->selectall_arrayref(
+    "SELECT * FROM AllGenome WHERE gtdbSpecies LIKE ? ORDER BY inTop DESC",
+   { Slice => {} }, $query);
+  if (@$genomes > 0) {
+    my $genome = $genomes->[0];
+    my $subdbSpec = "";
+    $subdbSpec = "&order=" . $genome->{prefix} unless $genome->{inTop};
+    print redirect(-url => "taxon.cgi?level=species&taxon="
+                   . uri_escape($genome->{gtdbSpecies}) . $subdbSpec);
+    exit(0);
+  }
+}
+
+if (@$taxList == 0 && $query ne "" && lc($query) ne "none") {
+  # Look for this strain
+  # First look in the current database
+  my $genomes = getDbHandle()->selectall_arrayref("SELECT * from Genome WHERE strain LIKE ? OR strain LIKE ?",
+                                                  { Slice => {} }, $query, $query.";%");
+  if (@$genomes > 0) {
+    print redirect(-url => addOrderToURL("genome.cgi?gid=" . $genomes->[0]{gid}));
+    exit(0);
+  }
+
+  # Else look in the top-level AllGenome table
+  $genomes = getTopDbHandle()->selectall_arrayref("SELECT * from AllGenome WHERE strain LIKE ? OR strain LIKE ?",
+                                                  { Slice => {} }, $query, $query.";%");
+  if (@$genomes > 0) {
+    my $genome = $genomes->[0];
+    my $subdbSpec = "";
+    $subdbSpec = "&order=" . $genome->{prefix} unless $genome->{inTop};
+    print redirect(-url => "genome.cgi?gid=" . $genomes->[0]{gid} . $subdbSpec);
+    exit(0);
+  }
+}
 
 if (@$taxList == 1) {
   my $taxObj = $taxList->[0];
@@ -35,19 +99,8 @@ if (@$taxList == 1) {
 
 start_page('title' => "Taxon search");
 if (@$taxList == 0 && $query ne "") {
-  my $message = "Sorry, no matching taxa were found for "
+  my $message = "Sorry, no matching taxa or strains were found for "
     . q{"} . encode_entities($query) . q{".};
-  if (getOrder eq "") {
-    my $genus = $query; $genus =~ s/\s.*//;
-    $message .= " Try searching for "
-      . a({-href => "findTaxon.cgi?query=" . uri_escape($genus)}, encode_entities($genus))
-      . " instead. (Many species are included only in the order-specific sub-databaases.)"
-        if $query =~ m/\s/;
-  } else {
-    $message .= " Search the "
-      . a({-href => "findTaxon.cgi?query=" . uri_escape($query)}, "main database")
-        . " instead.";
-  }
   $message .= join(" ",
                    " Or search",
                    a({ -href => "https://gtdb.ecogenomic.org/searches?s=al&q=".uri_escape($query),
@@ -59,7 +112,8 @@ if (@$taxList == 0 && $query ne "") {
 }
 
 if (@$taxList > 0) {
-  print p(scalar(@$taxList), "matching taxa"),
+  print p("Found", scalar(@$taxList), "matching taxa in the database of",
+          getOrder() || "representative genomes"),
     "<TABLE cellpadding=2 cellspacing=2>",
     Tr(th([ "Level", "Taxon", "#Genomes" ]));
   my $iRow = 0;
