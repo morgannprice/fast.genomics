@@ -27,6 +27,7 @@ my $defaultKbWidth = 150;
 #	arrowWidth -- width in SVG units of the triangular part of each gene
 #	geneHeight -- how high each gene should be
 #	showLabel -- whether or not to draw the gene labels
+#	scaffoldLength -- the length of the scaffold (affects extent of center line)
 #
 # Returns a hash which includes
 #	svg (string), xMax, yMax
@@ -53,8 +54,17 @@ sub genesSvg {
 
   my @svgLines = ();
   my $geneYMid = $yTop + $geneHeight/2;
+  my ($lineLeft, $lineRight);
+  if (defined $param{scaffoldLength}) {
+    my $scaffoldLength = $param{scaffoldLength};
+    $lineLeft = max($xLeft, $xLeft + (1 - $begin) * $ntWidth);
+    $lineRight = min($xRight, $xLeft + ($scaffoldLength - $begin) * $ntWidth);
+  } else {
+    $lineLeft = $xLeft;
+    $lineRight = $xRight;
+  }
   push @svgLines,
-    qq[<line x1="$xLeft" y1="$geneYMid" x2="$xRight" y2="$geneYMid" style="stroke:darkgrey; stroke-width:1;"/>];
+    qq[<line x1="$lineLeft" y1="$geneYMid" x2="$lineRight" y2="$geneYMid" style="stroke:darkgrey; stroke-width:1;"/>];
   foreach my $gene (@genes) {
     my ($x1, $x2, $showStrand);
     if ($invert) {
