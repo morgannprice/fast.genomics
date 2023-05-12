@@ -144,7 +144,7 @@ foreach my $order (sort keys %orderToGenomes) {
   system("sqlite3 $dbFile < $sqlFile") == 0 || die $!;
   open(my $fhSql, "|-", "sqlite3", "$dbFile") || die "Cannot run sqlite3 on $dbFile";
   print $fhSql ".mode tabs\n";
-  foreach my $table (qw{Genome Gene Protein ClusteringInfo Taxon}) {
+  foreach my $table (qw{Genome Gene Protein ClusteringInfo Taxon Scaffold}) {
     print $fhSql ".import $orderDir/neighbor_${table}.tab $table\n";
   }
   # Remove higher level taxa from Taxon
