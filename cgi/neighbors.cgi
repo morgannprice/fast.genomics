@@ -512,6 +512,9 @@ foreach my $hit (@$geneHits) {
                     color => $focalColor };
     }
   }
+  my ($scaffoldLen) = getDbHandle->selectrow_array(
+    "SELECT length FROM Scaffold WHERE gid = ? AND scaffoldId = ?",
+    {}, $hit->{gid}, $hit->{scaffoldId});
   my %genesSvg = genesSvg($hit->{showGenes},
                           'begin' => $showBegin, 'end' => $showEnd,
                           'kbWidth' => $kbWidth,
@@ -519,7 +522,8 @@ foreach my $hit (@$geneHits) {
                           'yTop' => $yAt,
                           # labels only for the top row
                           'showLabel' => $hit->{locusTag} eq $geneHits->[0]{locusTag},
-                          'invert' => $hit->{strand} eq "-");
+                          'invert' => $hit->{strand} eq "-",
+                          'scaffoldLength' => $scaffoldLen);
   push @svgLines, $genesSvg{svg};
   $yAt = max($yAt, $genesSvg{yMax}) + 2;
   $xMax = max($xMax, $genesSvg{xMax});
