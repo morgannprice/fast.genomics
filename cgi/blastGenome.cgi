@@ -285,12 +285,15 @@ if (!-e $fnaFile) {
           }
           push @showOverlap, $showOverlap;
         }
+        my $w = max(500, abs($sBeg-$sEnd)/2);
+        my $sBeg2 = max(1, min($sBeg,$sEnd) - $w);
+        my $sEnd2 = max($sBeg,$sEnd) + $w;
         print Tr({-bgcolor => $iRow % 2 == 1 ? "white" : "lightgrey"},
                  td({-valign => "top", -align => "left"}, $scaffoldId),
                  td({-valign => "top", -align => "center"}, $strand),
                  td({-valign => "top", -align => "left"},
                     a({-href => "https://www.ncbi.nlm.nih.gov/nuccore/$scaffoldId?report=graph"
-                       . "&from=$sBeg&to=$sEnd"
+                       . "&from=$sBeg2&to=$sEnd2"
                        . " &mk=$sBeg:$sEnd|hit_region|00008f",
                        -title => "NCBI's viewer",
                        -style => "text-decoration: none;"},
