@@ -406,12 +406,15 @@ sub hitsToTopGenes($$) {
 
 # Like hitsToTopGenes(), but only 1 hit per cluster x species,
 # and each returned row includes clusterId, species, nGenomes, and genes
+# This needs to look further down the list than n to make sure that any
+#   further hits to that species/cluster with very-similar bit scores are identified.
 sub hitsToTopGenesClustered($$$) {
   my ($hits, $n, $preferredLocusTag) = @_;
   die "Cannot use clustering in top db" unless getOrder() ne "";
   my @hitGenes = ();
   my %clusteredGenes = (); # cluster => species => list of locus tags
   my %clusteredGid = (); # cluster => species => gid => 1
+  my $bitThreshold; # #bits at #hitGenes == n
   foreach my $hit (@$hits) {
     foreach my $hg (@{ hitsToGenes([ $hit ]) }) {
       my ($clusterId) = getDbHandle()->selectrow_array(
@@ -436,10 +439,12 @@ sub hitsToTopGenesClustered($$$) {
       }
       push @{ $clusteredGenes{$clusterId}{$species} }, $hg->{locusTag};
       $clusteredGid{$clusterId}{$species}{ $hg->{gid} } = 1;
-      last if scalar(@hitGenes) >= $n;
     }
-    last if scalar(@hitGenes) >= $n;
+    $bitThreshold = $hit->{bits}
+      if !defined $bitThreshold && scalar(@hitGenes) >= $n;
+    last if defined $bitThreshold && $hit->{bits} < $bitThreshold - 10;
   }
+  splice @hitGenes, $n; # limit to requested length
   foreach my $hg (@hitGenes) {
     my $clusterId = $hg->{clusterId};
     my $species = $hg->{species};
