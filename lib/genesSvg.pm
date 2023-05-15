@@ -11,6 +11,14 @@ our (@ISA,@EXPORT);
 
 my $defaultKbWidth = 150;
 
+# Helper routine for position on chromosome to SVG x coordinate (not clipped)
+sub posToX($$$$$$) {
+  my ($pos, $xLeft, $begin, $end, $ntWidth, $invert) = @_;
+  return $xLeft + ($end-$pos) * $ntWidth if $invert;
+  #else
+  return $xLeft + ($pos-$begin) * $ntWidth;
+}
+
 # genesSvg() produces the SVG for a track (not an entire SVG object).
 #
 # The first argument is a list of genes to show
@@ -54,51 +62,44 @@ sub genesSvg {
 
   my @svgLines = ();
   my $geneYMid = $yTop + $geneHeight/2;
-  my ($lineLeft, $lineRight);
+  my ($lineLeft, $lineRight); # if invert, the direction might be swapped
   if (defined $param{scaffoldLength}) {
     my $scaffoldLength = $param{scaffoldLength};
-    $lineLeft = max($xLeft, $xLeft + (1 - $begin) * $ntWidth);
-    $lineRight = min($xRight, $xLeft + ($scaffoldLength - $begin) * $ntWidth);
+    $lineLeft = max($xLeft, min($xRight, posToX(1, $xLeft, $begin, $end, $ntWidth, $invert)));
+    $lineRight = max($xLeft, min($xRight, posToX($scaffoldLength, $xLeft, $begin, $end, $ntWidth, $invert)));
   } else {
     $lineLeft = $xLeft;
     $lineRight = $xRight;
   }
   push @svgLines,
     qq[<line x1="$lineLeft" y1="$geneYMid" x2="$lineRight" y2="$geneYMid" style="stroke:darkgrey; stroke-width:1;"/>];
+  my $showPlus = $invert ? "-" : "+";
   foreach my $gene (@genes) {
-    my ($x1, $x2, $showStrand);
-    if ($invert) {
-      $x1 = $xLeft + ($end - $gene->{end}) * $ntWidth;
-      $x2 = $xLeft + ($end - $gene->{begin}) * $ntWidth;
-      $showStrand = $gene->{strand} eq "+" ? "-" : "+";
-    } else {
-      $x1 = $xLeft + ($gene->{begin} - $begin) * $ntWidth;
-      $x2 = $xLeft + ($gene->{end} - $begin) * $ntWidth;
-      $showStrand = $gene->{strand};
-    }
-    my $truncateLeft = 0;
-    my $truncateRight = 0;
+    my $x1 = posToX($gene->{begin}, $xLeft, $begin, $end, $ntWidth, $invert);
+    my $x2 = posToX($gene->{end}, $xLeft, $begin, $end, $ntWidth, $invert);
+
+    my $truncated = 0;
     if ($x1 < $xLeft) {
       $x1 = $xLeft;
-      $truncateLeft = 1;
+      $truncated = 1;
     }
     if ($x2 < $xLeft) {
       $x2 = $xLeft;
-      $truncateLeft = 1;
+      $truncated = 1;
     }
     if ($x1 > $xRight) {
       $x1 = $xRight;
-      $truncateRight = 1;
+      $truncated = 1;
     }
     if ($x2 > $xRight) {
       $x2 = $xRight;
-      $truncateRight = 1;
+      $truncated = 1;
     }
 
     my $y1 = $yTop;
     my $y2 = $yTop + $geneHeight; # SVG has +y axis going down
     my ($xStart, $xStop) = ($x1,$x2);
-    ($xStart,$xStop) = ($x2,$x1) if $showStrand eq "-";
+    ($xStart,$xStop) = ($x2,$x1) if $gene->{strand} eq "-";
     my @points; # list of x,y pairs
     if (abs($xStart-$xStop) < $arrowWidth) {
       @points = ([$xStart,$y2], [$xStart,$y1], [$xStop,$geneYMid]);
@@ -116,7 +117,7 @@ sub genesSvg {
     }
     my $URL = encode_entities( $gene->{URL} || "");
     my $title = encode_entities( join(": ", $gene->{label}, $gene->{desc}) );
-    $title = "(extends beyond this view) $title" if $truncateLeft || $truncateRight;
+    $title = "(extends beyond this view) $title" if $truncated;
     push @svgLines, qq{<a xlink:href="$URL">},
       "<title>$title</title>",
       $poly;
@@ -132,16 +133,11 @@ sub genesSvg {
       }
     }
     push @svgLines, "</a>";
-    if (exists $gene->{bar} && ! $truncateLeft && ! $truncateRight) {
+    if (exists $gene->{bar} && ! $truncated) {
       my $bar = $gene->{bar};
       my ($xBar1, $xBar2);
-      if ($showStrand eq "+") {
-        $xBar1 = $x1 + $bar->{beginFraction} * ($x2-$x1);
-        $xBar2 = $x1 + $bar->{endFraction} * ($x2-$x1);
-      } else {
-        $xBar1 = $x2 - $bar->{beginFraction} * ($x2-$x1);
-        $xBar2 = $x2 - $bar->{endFraction} * ($x2-$x1);
-      }
+      $xBar1 = $xStart + $bar->{beginFraction} * ($xStop-$xStart);
+      $xBar2 = $xStart + $bar->{endFraction} * ($xStop-$xStart);
       my $yBar = $yTop + $geneHeight + 4;
       my $barColor = $bar->{color} || "darkgrey";
       my $line  = qq[<line x1="$xBar1" x2="$xBar2" y1="$yBar" y2="$yBar" style="stroke: $barColor; stroke-width: 3;">];
@@ -160,16 +156,11 @@ sub genesSvg {
   for (my $i = 0; $i < scalar(@$genes) - 1; $i++) {
     my $gene1 = $genes[$i];
     my $gene2 = $genes[$i+1];
-    my ($x1, $x2); # end of gene 1 to beginning of gene 2
-    if ($invert) {
-      $x1 = $xLeft + ($end - $gene1->{end}) * $ntWidth;
-      $x2 = $xLeft + ($end - $gene2->{begin}) * $ntWidth;
-    } else {
-      $x1 = $xLeft + ($gene1->{end} - $begin) * $ntWidth;
-      $x2 = $xLeft + ($gene2->{begin} - $begin) * $ntWidth;
-    }
+    my $x1 = posToX($gene1->{end}, $xLeft, $begin, $end, $ntWidth, $invert);
+    my $x2 = posToX($gene2->{begin}, $xLeft, $begin, $end, $ntWidth, $invert);
     ($x1, $x2) = ($x2, $x1) unless $x2 > $x1;
     next unless $x1 >= $xLeft && $x2 <= $xRight;
+    # Ensure it is wide enough to hover on
     $x1 = max($xLeft, $x1 - 3);
     $x2 = min($xRight, $x2 + 3);
     my $distText;
