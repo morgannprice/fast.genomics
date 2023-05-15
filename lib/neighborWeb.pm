@@ -208,6 +208,9 @@ sub computeSubDbHomologs($) {
   my $formatdb = "../bin/blast/formatdb";
   die "No such executable: $formatdb" unless -x $formatdb;
 
+  my ($nGenomes) = getDbHandle()->selectrow_array("SELECT COUNT(*) FROM Genome;");
+  my $nMaxHits = max(int(1.5 * $nGenomes + 0.5), 200);
+
   print "<P><small>Running BLASTp.</small>\n" unless $quietMode;
   my $hits1 = runBLASTp('blastall' => $blastall, 'query' => $seq, 'db' => $clusterDb,
                         'eValue' => 1e-3, 'nCPUs' => 12);
@@ -219,15 +222,13 @@ sub computeSubDbHomologs($) {
   }
 
   #else
-  print "<small>Processing " . scalar(@$hits1) . " clusters and re-running BLASTp.</small>\n"
+  my @clusterIds = removeDuplicates(map $_->{subject}, @$hits1);
+  splice @clusterIds, $nMaxHits;
+  print "<small>Processing " . scalar(@clusterIds) . " clusters and re-running BLASTp.</small>\n"
     unless $quietMode;
-  my %clusterIds = map { $_->{subject} => 1 } @$hits1;
-  my @clusterIds = sort keys %clusterIds;
   my $subDbh = getSubDbHandle();
   my $proteinIds = expandByClusters(\@clusterIds, $subDbh);
-  my ($nGenomes) = getDbHandle()->selectrow_array("SELECT COUNT(*) FROM Genome;");
-  my $nMaxHits = max(int(1.5 * $nGenomes + 0.5), 200);
-  splice @$proteinIds, $nMaxHits if scalar(@$proteinIds) > $nMaxHits;
+  splice @$proteinIds, $nMaxHits;
   print "<!-- expanded to " . scalar(@$proteinIds) . " -->\n" unless $quietMode;
   my $tmpPre = "/tmp/neighborWeb.$$";
   proteinsToFaa($proteinIds, "$tmpPre.faa", $subDbh);
@@ -962,6 +963,18 @@ sub moreGenomesInSubDb($$$) {
                                            {}, $taxon);
   }
   return $nSubGenomes > $nMainGenomes ? $nSubGenomes : 0;
+}
+
+sub removeDuplicates {
+  my (@in) = @_;
+  my %seen = ();
+  my @out = ();
+  foreach my $value (@in) {
+    next if exists $seen{$value};
+    $seen{$value} = 1;
+    push @out, $value;
+  }
+  return @out;
 }
 
 1;
