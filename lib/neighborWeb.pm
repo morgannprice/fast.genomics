@@ -38,7 +38,7 @@ our (@ISA,@EXPORT);
              getTaxa taxLevels taxToParts taxLevelToParent taxLevelToChild
              capitalize
              geneHitsToProteinAlignment geneHitsToTree
-             getSubDbHomologs};
+             computeSubDbHomologs};
 
 # In quiet mode, do not print explanations about what computations are being run,
 # or HTML comments (which might raise the risk of time outs)
@@ -213,7 +213,7 @@ sub computeSubDbHomologs($) {
 
   print "<P><small>Running BLASTp.</small>\n" unless $quietMode;
   my $hits1 = runBLASTp('blastall' => $blastall, 'query' => $seq, 'db' => $clusterDb,
-                        'eValue' => 1e-3, 'nCPUs' => 12);
+                        'eValue' => 1e-3, 'nCPUs' => 15);
   if (@$hits1 == 0) {
     # save the empty hits file
     open(my $fh, ">", $hitsFile) || die "Cannot write to $hitsFile";
