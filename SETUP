@@ -14,11 +14,14 @@ lastal and lastdb (for LAST), we use version 1422
 muscle3, we use version 3.8.31
 FastTree, we use version 2.1.11 SSE3
 
-The bin/blast directory must include the BLAST executables
+The bin/blast directory must include the (original) BLAST executables
 formatdb, blastall, and bl2seq; we use version 2.2.26
 
+The bin/blast+ directory must include the BLAST+ executables
+makeblastdb and blastp; we use 2.13.0+
+
 The tmp/cache/ and tmp/hits/ subdirectories
-should exist and be writable by the web server.
+must exist and be writable by the web server.
 
 The PaperBLAST code base must be installed in the parent directory --
 i.e., if the cgi scripts are in parent/neighbor/cgi
@@ -26,7 +29,8 @@ then the PaperBLAST libraries must be in parent/PaperBLAST/lib
 
 The data/ subdirectory should include neighbor.db, neighbor.sliced,
 neighbor.sliced*, and neighbor.faa.gz (created by the bin/build.pl
-script).
+script). It can also have a 1-line file, gtdb.version, to show which
+release of GTDB it is based on.
 
 Important for performance: use
   bin/touchSliced.pl data/neighbor.sliced
@@ -41,7 +45,7 @@ the executable fastacmd.
 
 If sub-databases are being used, then for each row in SubDb in the
 main database, the data should be in data/prefix/ with the files
-sub.db, clusters.faa.gz, cluster.faa.p* (BLASTp database), and
+sub.db, clusters.faa.gz, cluster.faa.plusdb.* (BLAST+ databases), and
 neighbor.faa.gz (created by the bin/buildSubDbs.pl script).
 
 Optionally, use the motd file to show a "message of the data" at the

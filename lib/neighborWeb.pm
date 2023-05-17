@@ -199,52 +199,28 @@ sub saveMMSeqsHits($) {
 # each containg subject, eValue, etc.
 sub computeSubDbHomologs($) {
   my ($seq) = @_;
-  my $hitsFile = hitsFile($seq);
+  die if getOrder() eq "";
   my $clusterDb = getSequenceDb();
-  die "No such file: $clusterDb.pin" unless -e "$clusterDb.pin";
+  die "No such file: $clusterDb.plusdb.pin" unless -e "$clusterDb.plusdb.pin";
 
-  my $blastall = "../bin/blast/blastall";
-  die "No such executable: $blastall" unless -x $blastall;
-  my $formatdb = "../bin/blast/formatdb";
-  die "No such executable: $formatdb" unless -x $formatdb;
-
-  my ($nGenomes) = getDbHandle()->selectrow_array("SELECT COUNT(*) FROM Genome;");
-  my $nMaxHits = max(int(1.5 * $nGenomes + 0.5), 200);
-
-  print "<P><small>Running BLASTp.</small>\n" unless $quietMode;
-  my $hits1 = runBLASTp('blastall' => $blastall, 'query' => $seq, 'db' => $clusterDb,
-                        'eValue' => 1e-3, 'nCPUs' => 15);
-  if (@$hits1 == 0) {
-    # save the empty hits file
-    open(my $fh, ">", $hitsFile) || die "Cannot write to $hitsFile";
-    close($fh) || die "Error writing to $hitsFile";
-    return [];
-  }
-
-  #else
-  my @clusterIds = removeDuplicates(map $_->{subject}, @$hits1);
-  splice @clusterIds, $nMaxHits;
-  print "<small>Processing " . scalar(@clusterIds) . " clusters and re-running BLASTp.</small>\n"
-    unless $quietMode;
-  my $subDbh = getSubDbHandle();
-  my $proteinIds = expandByClusters(\@clusterIds, $subDbh);
-  splice @$proteinIds, $nMaxHits;
-  print "<!-- expanded to " . scalar(@$proteinIds) . " -->\n" unless $quietMode;
-  my $tmpPre = "/tmp/neighborWeb.$$";
-  proteinsToFaa($proteinIds, "$tmpPre.faa", $subDbh);
-  print "<!-- fetched protein sequences -->\n" unless $quietMode;
-  formatBLASTp($formatdb, "$tmpPre.faa");
-  my ($dbSize) = $subDbh->selectrow_array("SELECT nClusteredAA FROM ClusteringInfo");
-  my $hits = runBLASTp('blastall' => $blastall, 'query' => $seq, 'db' => "$tmpPre.faa",
-            'eValue' => 1e-3, 'nCPUs' => 2, 'dbSize' => $dbSize);
-  print "<!-- ran BLASTp 2nd time -->\n" unless $quietMode;
-  unlink("$tmpPre.faa");
-  foreach my $suffix (qw{phr pin psq}) {
-    unlink("$tmpPre.faa.$suffix");
-  }
-  # Limit the number of hits
-  splice @$hits, $nMaxHits if scalar(@$hits) > $nMaxHits;
-  return $hits;
+  my ($nGenomes, $nProteins, $nClusters) = getTopDbHandle()->selectrow_array(
+    "SELECT nGenomes, nProteins, nClusters FROM SubDb WHERE taxon = ?",
+    {}, getOrder());
+  die "No genomes listed for order in SubDb ?" unless $nGenomes > 0;
+  my $mult = $nProteins > 2 * $nClusters ? 0.5 : 1;
+  my $nMaxHits1 = max(int($mult * $nGenomes + 0.5), 200);
+  my $nMaxHits2 = max($nGenomes, 200);
+  my $scale = $nProteins/$nClusters;
+  my $hits = clusteredBLASTp('query' => $seq,
+                             'clusterDb' => $clusterDb,
+                             'maxHits' => [$nMaxHits1,$nMaxHits2],
+                             'dbh' => getSubDbHandle(),
+                             'nCPUs' => 12,
+                             'quiet' => $quietMode,
+                             'scale' => $scale,
+                             'bin' => "../bin");
+  my $hitsFile = hitsFile($seq);
+  #XXX
 }
 
 # The query may be a locus tag in the database,
@@ -963,18 +939,6 @@ sub moreGenomesInSubDb($$$) {
                                            {}, $taxon);
   }
   return $nSubGenomes > $nMainGenomes ? $nSubGenomes : 0;
-}
-
-sub removeDuplicates {
-  my (@in) = @_;
-  my %seen = ();
-  my @out = ();
-  foreach my $value (@in) {
-    next if exists $seen{$value};
-    $seen{$value} = 1;
-    push @out, $value;
-  }
-  return @out;
 }
 
 1;
