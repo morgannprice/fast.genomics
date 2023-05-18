@@ -37,8 +37,8 @@ our (@ISA,@EXPORT);
              domainHtml
              getTaxa taxLevels taxToParts taxLevelToParent taxLevelToChild
              capitalize
-             geneHitsToProteinAlignment geneHitsToTree
-             computeSubDbHomologs};
+             geneHitsToProteinAlignment geneHitsToTree};
+
 
 # In quiet mode, do not print explanations about what computations are being run,
 # or HTML comments (which might raise the risk of time outs)
@@ -211,16 +211,14 @@ sub computeSubDbHomologs($) {
   my $nMaxHits1 = max(int($mult * $nGenomes + 0.5), 200);
   my $nMaxHits2 = max($nGenomes, 200);
   my $scale = $nProteins/$nClusters;
-  my $hits = clusteredBLASTp('query' => $seq,
-                             'clusterDb' => $clusterDb,
-                             'maxHits' => [$nMaxHits1,$nMaxHits2],
-                             'dbh' => getSubDbHandle(),
-                             'nCPUs' => 12,
-                             'quiet' => $quietMode,
-                             'scale' => $scale,
-                             'bin' => "../bin");
-  my $hitsFile = hitsFile($seq);
-  #XXX
+  return clusteredBLASTp('query' => $seq,
+                         'clusterDb' => $clusterDb,
+                         'maxHits' => [$nMaxHits1,$nMaxHits2],
+                         'dbh' => getSubDbHandle(),
+                         'nCPUs' => 12,
+                         'quiet' => $quietMode,
+                         'scale' => $scale,
+                         'bin' => "../bin");
 }
 
 # The query may be a locus tag in the database,
