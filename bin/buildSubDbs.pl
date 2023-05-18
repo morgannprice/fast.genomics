@@ -53,8 +53,8 @@ die "minIdentity is out of range\n" unless $minIdentity >= 0.5 && $minIdentity <
 
 my $cdhit = "$RealBin/cd-hit";
 die "No such executable: $cdhit\n" unless -x $cdhit;
-my $formatdb = "$RealBin/blast/formatdb";
-die "No such executable: $formatdb\n" unless -x $formatdb;
+my $exeDir = "$RealBin/blast+";
+die "No such directory: $exeDir\n" unless -d $exeDir;
 
 die "No such directory: $inDir\n" unless -d $inDir;
 die "No such directory: $outDir\n" unless -d $outDir;
@@ -131,10 +131,11 @@ foreach my $order (sort keys %orderToGenomes) {
   }
   my $nClusters = scalar(keys %$clusters);
   my $nClusteredAA = proteinDbSize($clusterPre);
-  print $fhCI join("\t", $nProteins, $nClusters, $nClusteredAA)."\n";
+  my $nAA = proteinDbSize($proteinFaa);
+  print $fhCI join("\t", $nProteins, $nClusters, $nClusteredAA, $nAA)."\n";
   close($fhCI) || die "Error writing to $cInfoTab\n";
   unlink("$clusterPre.clstr");
-  formatBLASTp($formatdb, $clusterPre);
+  formatBLASTp($exeDir, $clusterPre, 1 ); # 1 for use BLAST+
 
   # Build the sql database
   print STDERR "Building the sqlite3 database $orderDir/sub.db\n";
