@@ -105,7 +105,8 @@ CREATE INDEX 'ProteinToCluster' ON ClusterProtein (proteinId,clusterId);
 CREATE TABLE ClusteringInfo (
   nProteins INT NOT NULL,
   nClusters INT NOT NULL,
-  nClusteredAA INT NOT NULL
+  nClusteredAA INT NOT NULL,
+  nAA INT NOT NULL
 );
 
 /* In the subdbs, only taxa up to the order level are represented */

@@ -202,22 +202,21 @@ sub computeSubDbHomologs($) {
   die if getOrder() eq "";
   my $clusterDb = getSequenceDb();
   die "No such file: $clusterDb.plusdb.pin" unless -e "$clusterDb.plusdb.pin";
+  my ($nProteins, $nClusters, $nAA) = getDbHandle()->selectrow_array(
+    "SELECT nProteins, nClusters, nAA FROM ClusteringInfo");
+  my ($nGenomes) = getDbHandle()->selectrow_array("SELECT COUNT(*) FROM Genome");
 
-  my ($nGenomes, $nProteins, $nClusters) = getTopDbHandle()->selectrow_array(
-    "SELECT nGenomes, nProteins, nClusters FROM SubDb WHERE taxon = ?",
-    {}, getOrder());
   die "No genomes listed for order in SubDb ?" unless $nGenomes > 0;
   my $mult = $nProteins > 2 * $nClusters ? 0.5 : 1;
   my $nMaxHits1 = max(int($mult * $nGenomes + 0.5), 200);
   my $nMaxHits2 = max($nGenomes, 200);
-  my $scale = $nProteins/$nClusters;
   return clusteredBLASTp('query' => $seq,
                          'clusterDb' => $clusterDb,
                          'maxHits' => [$nMaxHits1,$nMaxHits2],
                          'dbh' => getSubDbHandle(),
                          'nCPUs' => 12,
                          'quiet' => $quietMode,
-                         'scale' => $scale,
+                         'dbSize' => $nAA,
                          'bin' => "../bin");
 }
 

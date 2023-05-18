@@ -10,8 +10,8 @@ use pbutils qw{ReadFasta};
 
 my $maxHits1 = 500;
 my $maxHits2 = 500;
-my $scale = 1;
 my $eValue = 1e-3;
+my $dbSize = 0;
 my $dataDir = "$RealBin/../data";
 my $nCPUs = 12;
 
@@ -21,7 +21,7 @@ clusteredBLASTp.pl -subdb order -in sequence -out hits
 
 Optional arguments:
  -dataDir -- default $dataDir
- -scale (of evalues) -- defaults to $scale
+ -dbSize (a.a. in unclustered db) -- defaults to 0 (uncorrected evalues)
  -evalue (maximum) -- default $eValue
  -maxHits1 -- defaults to $maxHits1
  -maxHits2 -- defaults to $maxHits2
@@ -36,7 +36,7 @@ die $usage
                     'out=s' => \$outFile,
                     'subdb=s' => \$subdb,
                     'dataDir=s' => \$dataDir,
-                    'scale=f' => \$scale,
+                    'dbSize=i' => \$dbSize,
                     'evalue=f' => \$eValue,
                     'maxHits1=i' => \$maxHits1,
                     'maxHits2=i' => \$maxHits2,
@@ -62,7 +62,7 @@ my $hits = clusteredBLASTp('query' => $seq, 'clusterDb' => $clusterDb,
                            'nCPUs' => $nCPUs,
                            'bin' => $RealBin,
                            'maxHits' => [ $maxHits1, $maxHits2 ],
-                           'scale' => $scale,
+                           'dbSize' => $dbSize,
                            'eValue' => $eValue,
                            'quiet' => defined $quiet);
 open(my $fhOut, ">", $outFile) || die "Cannot write to $outFile\n";

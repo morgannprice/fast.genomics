@@ -249,16 +249,20 @@ sub proteinDbSize($) {
 
 # Given a list of proteins and a database handle with the Protein table,
 # make a fasta file of their sequences
+# Returns the total #a.a.
 sub proteinsToFaa($$$) {
   my ($proteinIds, $faaOut, $dbh) = @_;
+  my $nAA = 0;
   open(my $fh, ">", $faaOut) || die "Cannot write to $faaOut";
   foreach my $proteinId (@$proteinIds) {
     my ($seq) = $dbh->selectrow_array("SELECT sequence FROM Protein WHERE proteinId = ?",
                                       {}, $proteinId);
     die "No sequence for $proteinId" unless $seq;
+    $nAA += length($seq);
     print $fh ">" . $proteinId . "\n" . $seq . "\n";
   }
   close($fh) || die "Error writing to $faaOut";
+  return $nAA;
 }
 
 # The input hash must include the arguments
@@ -270,8 +274,7 @@ sub proteinsToFaa($$$) {
 # maxHits (a list with the maximum #hits for the first round and for the second round)
 #
 # Optional argument:
-# scale -- size of full database / size of clustered database (defaults to 1, only
-#   appropriate if you do not really care about the evalues)
+# dbSize -- amino acids in the full (unclustered) database, or 0 to not correct evalues
 # eValue -- default 1e-3
 # quiet -- if not set, outputs HTML comments about what it is doing.
 #
@@ -287,7 +290,7 @@ sub clusteredBLASTp {
   my $maxHits = $in{maxHits} || die "Must specify maxHits";
   my ($nMaxHits1, $nMaxHits2) = @$maxHits;
   die "Invalid maxHits" unless $nMaxHits1 > 0 && $nMaxHits2 > 0;
-  my $scale = $in{scale} || 1;
+  my $dbSize = $in{dbSize} || 0;
   my $eValue = $in{eValue} || 1e-3;
   my $quiet = $in{quiet} || 0;
 
@@ -305,7 +308,7 @@ sub clusteredBLASTp {
   splice @$proteinIds, $nMaxHits2;
   print "<!-- expanded to " . scalar(@$proteinIds) . " -->\n" unless $quiet;
   my $tmpPre = ($ENV{TMPDIR} || "/tmp") . "/clusterBLASTp.$$";
-  proteinsToFaa($proteinIds, "$tmpPre.faa", $dbh);
+  my $nAA = proteinsToFaa($proteinIds, "$tmpPre.faa", $dbh);
   print "<!-- fetched protein sequences -->\n" unless $quiet;
 
   my $inFile = "$tmpPre.in";
@@ -332,9 +335,12 @@ sub clusteredBLASTp {
   }
   # Limit the number of hits
   splice @$hits, $nMaxHits2;
-  # Scale the evalues and filter by evalue
-  foreach my $hit (@$hits) {
-    $hit->{eValue} = sprintf("%.0g", $scale * $hit->{eValue});
+  if ($dbSize > 0) {
+    # Scale the evalues
+    my $scale = $dbSize / $nAA;
+    foreach my $hit (@$hits) {
+      $hit->{eValue} = sprintf("%.0g", $scale * $hit->{eValue});
+    }
   }
   my @hits2 = grep $_->{eValue} <= $eValue, @$hits;
   return \@hits2;
