@@ -204,7 +204,8 @@ my $iRow = 0;
 my $maxRows;
 $maxRows = 200 if $all eq "freq";
 foreach my $row (@rows) {
-  my @out = split /;;;/, $row->{taxString};
+  my @taxPieces = split /;;;/, $row->{taxString};
+  my @out = @taxPieces;
   for (my $i = 0; $i < scalar(@levels); $i++) {
     my $levelThis = $levels[$i];
     if ($levelThis eq "domain") {
@@ -232,10 +233,10 @@ foreach my $row (@rows) {
     }
     my $URL = addOrderToURL("genes.cgi?" . join("&", map "g=" . $_->{locusTag}, @tHits));
     my $goodString = $showGood ? "good" : "all";
-    my $truncateString = $truncate ? " top $maxShow" : "";
+    my $truncateString = $truncate ? " top $maxShow of" : "";
     $showNHits = a({ -href => $URL,
                    -style => "text-decoration: none;",
-                   -title => "see$truncateString $goodString hits in " . encode_entities($out[-1]) },
+                   -title => "see$truncateString $goodString hits in " . encode_entities($taxPieces[-1]) },
                    $showNHits);
   } else {
     $showNHits = "&nbsp;";
