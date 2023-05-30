@@ -74,15 +74,13 @@ for (my $i = 0; $i < $nSlices; $i++) {
   # Each job needs its own temporary directory
   my $tmpSub = "$tmpDir/$i";
   mkdir($tmpSub) || die "Cannot mkdir $tmpSub\n";
-  my $cmd = "$mmseqs easy-search $inFaa $pre$i $tmpDir/hits$i $tmpSub -e $eValueSlice --db-load-mode $dbLoadMode -s $sens --max-seqs $maxAlignSlice --threads $nThreads > $tmpDir/log$i";
+  my $cmd = "$mmseqs easy-search $inFaa $pre$i $tmpDir/hits$i.tmp $tmpSub -e $eValueSlice --db-load-mode $dbLoadMode -s $sens --max-seqs $maxAlignSlice --threads $nThreads > $tmpDir/log$i";
   print STDERR "Running: $cmd\n" if defined $debug;
   if (my $pid = fork()) {
     ; # do nothing in the parent process
   } else {
-    if (system($cmd) != 0) {
-      unlink("$tmpDir/hits$i");
-      die "$cmd failed: $!";
-    }
+    system($cmd) == 0 || die "$cmd failed: $!";
+    rename("$tmpDir/hits$i.tmp", "$tmpDir/hits$i");
     exit(0);
   }
 }
@@ -101,6 +99,14 @@ for(;;) {
 if (! $success) {
   system("rm -Rf $tmpDir");
   die "mmseqs failed\n";
+}
+
+if (defined $debug) {
+  for(my $i = 0; $i < $nSlices; $i++) {
+    my $nLines = `wc -l < $tmpDir/hits$i`;
+    chomp $nLines;
+    print STDERR "slice $i hits $nLines\n";
+  }
 }
 
 open (my $fhOut, ">", $outFile) || die "Cannot write to $outFile\n";
