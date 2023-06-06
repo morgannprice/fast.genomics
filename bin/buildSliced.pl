@@ -5,6 +5,8 @@ use FindBin qw{$RealBin};
 use lib "$RealBin/../../PaperBLAST/lib";
 use pbutils qw{ReadFastaEntry};
 
+my $k = 7;
+
 my $usage = <<END
 Usage: buildSliced.pl -in in.faa -out db -slices 6
 
@@ -14,13 +16,17 @@ resulting files will be named based on the output argument,
 i.e. db0.mmseqs, db1.mmseqs, ..., and associated index files.
 These can be queried with searchSliced.pl. The #slices is recorded in
 db.nSlices and db will be an empty file.
+
+Optional argument:
+  -k $k -- kmer size for each slice (or 0 to let MMseqs2 choose)
 END
 ;
 
 my ($inFaa, $outPre, $nSlices, $debug);
 die $usage
   unless GetOptions('in=s' => \$inFaa, 'out=s' => \$outPre, 'slices=i' => \$nSlices,
-                   'debug' => \$debug)
+                    'k=s' => \$k,
+                    'debug' => \$debug)
   && @ARGV == 0
   && defined $inFaa && defined $outPre && defined $nSlices;
 die "Invalid nSlices -- must be positive\n" unless $nSlices > 0;
@@ -62,7 +68,7 @@ for (my $i = 0; $i < $nSlices; $i++) {
 for (my $i = 0; $i < $nSlices; $i++) {
   my $mmDb = $outPre.$i;
   my @cmds = ("$mmseqs createdb $sliceFile[$i] $mmDb",
-              "$mmseqs createindex $mmDb $tmpDir");
+              "$mmseqs createindex $mmDb $tmpDir -k $k");
   foreach my $cmd (@cmds) {
     print STDERR "Running $cmd\n" if defined $debug;
     system("$cmd > $tmpDir/mmseqs.log") == 0
@@ -70,7 +76,7 @@ for (my $i = 0; $i < $nSlices; $i++) {
   }
   print STDERR "Created and indexed $mmDb\n" if defined $debug;
 }
-print STDERR "Created and indexed\n${outPre}0\nthrough\n$outPre".($nSlices-1)."\n";
+print STDERR "Created and indexed\n${outPre}0\nthrough\n$outPre".($nSlices-1)."\nwith k-mer size $k\n";
 
 open (my $fhS, ">", "$outPre.nSlices") || die "Cannot write to $outPre.nSlices";
 print $fhS $nSlices,"\n";
