@@ -46,7 +46,7 @@ die "Invalid kb" unless $kbShown =~ m/^\d+/;
 $kbShown = min(40, max(2, $kbShown));
 my $ntShown = $kbShown * 1000;
 my $kbWidth = int(0.5 + 150 / ($kbShown/6));
-my $compact = $cgi->param('compact') ? 1 : 0;
+my $compact = defined $cgi->param('compact') && $cgi->param('compact') eq "0" ? 0 : 1;
 $kbWidth *= 0.75 if $compact;
 my $hitType = $cgi->param('hitType') || 'top';
 $hitType = 'top' if $hitType eq 'topCollapse' && getOrder() eq "";
@@ -202,7 +202,6 @@ if ($format eq "") {
   # Show options form
   my $randomOption = "";
   my $treeChecked = $showTree ? "CHECKED" : "";
-  my $compactChecked = $compact ? "CHECKED" : "";
   my $topValues = getOrder() eq "" ? [qw{top randomAny random}]
     : [qw{top topCollapse randomAny random}];
   print
@@ -220,9 +219,10 @@ if ($format eq "") {
         'Kilobases:', popup_menu(-name => 'kb', -values => [6, 9, 12, 18, 25, 40], -default => $kbShown),
         "&nbsp;",
         qq{<INPUT name='tree' TYPE='checkbox' $treeChecked><label for='tree'>Show tree?</label>},
-        qq{<INPUT name='compact' title='use compact if viewing many homologs'
-                  TYPE='checkbox' $compactChecked>},
-        qq{<label for='compact' title='use compact if viewing many homologs'>Compact?</label>},
+        "&nbsp;",
+        'Style:',
+        popup_menu(-name => 'compact', -values => [1,0], -default => ! $compact,
+                   -labels => {'0' => 'detailed', '1' => 'compact'}),
         "&nbsp;",
         submit('Change')),
     end_form;
