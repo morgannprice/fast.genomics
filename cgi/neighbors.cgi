@@ -29,6 +29,7 @@ use MOTree; # from PaperBLAST/lib/
 #   topCollapse means show top hits but collapse cluster x species (subdbs only);
 #   random means select that many random good hits;
 #   randomAny means random N hits
+# compact -- use far less vertical space
 # format -- empty (default -- shows an svg) or fasta (proteins sequences of homologs shown)
 #     or tsv (tab-delimited table of all genes shown)
 #     or newick (the tree) or svg
@@ -45,6 +46,8 @@ die "Invalid kb" unless $kbShown =~ m/^\d+/;
 $kbShown = min(40, max(2, $kbShown));
 my $ntShown = $kbShown * 1000;
 my $kbWidth = int(0.5 + 150 / ($kbShown/6));
+my $compact = $cgi->param('compact') ? 1 : 0;
+$kbWidth *= 0.75 if $compact;
 my $hitType = $cgi->param('hitType') || 'top';
 $hitType = 'top' if $hitType eq 'topCollapse' && getOrder() eq "";
 my $showTree = $cgi->param('tree') || 0;
@@ -199,6 +202,7 @@ if ($format eq "") {
   # Show options form
   my $randomOption = "";
   my $treeChecked = $showTree ? "CHECKED" : "";
+  my $compactChecked = $compact ? "CHECKED" : "";
   my $topValues = getOrder() eq "" ? [qw{top randomAny random}]
     : [qw{top topCollapse randomAny random}];
   print
@@ -216,6 +220,9 @@ if ($format eq "") {
         'Kilobases:', popup_menu(-name => 'kb', -values => [6, 9, 12, 18, 25, 40], -default => $kbShown),
         "&nbsp;",
         qq{<INPUT name='tree' TYPE='checkbox' $treeChecked><label for='tree'>Show tree?</label>},
+        qq{<INPUT name='compact' title='use compact if viewing many homologs'
+                  TYPE='checkbox' $compactChecked>},
+        qq{<label for='compact' title='use compact if viewing many homologs'>Compact?</label>},
         "&nbsp;",
         submit('Change')),
     end_form;
@@ -229,7 +236,7 @@ if ($format eq "") {
   push @links, a({-href => "hitTaxa.cgi?$options"},
                  "taxonomic distribution"). " of its homologs";
   my @downloads = ();
-  push @downloads, a({ -href => "neighbors.cgi?${options}&n=${n}&hitType=${hitType}&tree=${showTree}&format=svg",
+  push @downloads, a({ -href => "neighbors.cgi?${options}&n=${n}&hitType=${hitType}&tree=${showTree}&format=svg&compact=${compact}",
                        -title => "figure in SVG format"}, "SVG");
   push @downloads, a({ -href => "neighbors.cgi?${options}&n=${n}&hitType=${hitType}&format=fasta",
                        -title => "homologs shown (fasta format)"}, "protein sequences");
@@ -264,7 +271,8 @@ if ($format eq "fasta") {
 }
 
 my $nHits = scalar(@$geneHits);
-my $yAt = 5;
+# In compact show-tree mode, need extra space at top for the tree's scale bar
+my $yAt = $compact && $showTree ? 25 : 1;
 my @svgLines = ();
 my $xMax = 500; # it will actually be much higher for the gene track
 
@@ -424,9 +432,10 @@ if ($showTree) {
 die unless $format eq "" || $format eq "svg";
 
 foreach my $hit (@$geneHits) {
+  my $trackHeight = $compact ? 10 : 18;
   my $hitGenome = gidToGenome($hit->{gid}) || die;
   my $genomeURL = encode_entities(addOrderToURL("genome.cgi?gid=$hit->{gid}"));
-  $yAt += 25; # make space for genome label
+
   my $identity = int(100 * $hit->{identity} + 0.5);
   my $qShow = $locusTag || "query";
   my $nHitAA = int(0.5 + ($hit->{end} - $hit->{begin} + 1 - 3)/3);
@@ -434,77 +443,125 @@ foreach my $hit (@$geneHits) {
   my $eValue = sprintf("%.2g", $hit->{eValue});
   my $hitDetails = "$hit->{qBegin}:$hit->{qEnd}/$seqLen of $qShow"
     . " is ${identity}% identical to $hit->{sBegin}:$hit->{sEnd}/$nHitAA of $hit->{locusTag} (E = $eValue)";
-  my @lineage = ();
-  my @levels = ();
-  if (getOrder() eq "") {
-    @levels = qw{domain phylum class order family};
-  } else {
-    @levels = qw{family}; # skip order, is always the same
-  }
-  foreach my $level (@levels) {
-    my $taxon = $hitGenome->{"gtdb" . capitalize($level)};
-    my $taxonURL = encode_entities(addOrderToURL("taxon.cgi?level=$level&taxon=".uri_escape($taxon)));
-    my $taxShow;
-    my $taxTitle;
-    if ($level eq "domain") {
-      my $domainChar = $taxon eq "Bacteria" ? "B" : "A";
-      my $domainColor = $domainChar eq "B" ? "blue" : "green";
-      $taxShow = qq[<tspan font-family="bold" font-size="85%" fill="$domainColor">$domainChar</tspan>];
-      $taxTitle = $taxon;
+  my $hitDetailsShort = "${identity}% identical to the query over " . ($hit->{sEnd}-$hit->{sBegin}+1) . " residues";
+
+  if ($compact) {
+    # Minimal genome label at right, with genus or species
+    my @levels = ();
+    if (getOrder() eq "") {
+      @levels = qw{domain phylum class order family species};
     } else {
-      my $size = getOrder() eq "" ? "70%" : "85%";
-      $taxShow = qq{<tspan font-size="$size">$taxon</tspan>};
-      $taxTitle = $level;
+      @levels = qw{family species};
     }
-    push @lineage, qq[<a xlink:href="$taxonURL"><title>$taxTitle</title>$taxShow</a>];
-  }
-  # Add species and sometimes strain information to the lineage (gtdbSpecies includes the genus name)
-  # In top-level db, always show the species (but not strain) and link to the genome
-  # In sub-db, link species to the taxon, and show the strain, except if this is a collapsed group, show the
-  # #genes/#genomes instead.
-  my $species = $hitGenome->{gtdbSpecies};
-  my $speciesE = qq{<tspan font-style="italic">}
-    . encode_entities($hitGenome->{gtdbSpecies}) . qq[</tspan>];
-  my $strainE = encode_entities($hitGenome->{strain});
-  if (getOrder() eq "") {
-    push @lineage, qq{<a xlink:href="$genomeURL"><title>strain $strainE</title><tspan font-size="85%">$speciesE</tspan></a>};
-  } else {
-    my $speciesURL = addOrderToURL("taxon.cgi?level=species&taxon=".uri_escape($species));
-    push @lineage, qq[<a xlink:href="$speciesURL"><title>genus/species</title>$speciesE</a>];
+    my $lineage = join(" : ",
+                       map $hitGenome->{"gtdb" . capitalize($_)}, @levels);
+    $lineage .= " " . $hitGenome->{strain}
+      unless exists $hit->{genes} && scalar(@{ $hit->{genes}}) > 1;
+    my $showTax;
+    if (getOrder() eq "") {
+      $showTax = $hitGenome->{"gtdbGenus"};
+    } else {
+      $showTax = $hitGenome->{"gtdbSpecies"};
+    }
+    $showTax = encode_entities($showTax);
+    my $xLabel = $genesLeft + $kbWidth * $kbShown + 5;
+    my $yCenter = $yAt + $trackHeight/2;
+    my $genomeURL = encode_entities(addOrderToURL("genome.cgi?gid=".$hitGenome->{gid}));
+    if (exists $hit->{genes} && exists $hit->{nGenomes}
+        && scalar(@{ $hit->{genes} }) > 1) {
+      # Link to genus not genome if >1 gene
+      $genomeURL = encode_entities(addOrderToURL("taxon.cgi?level=species&taxon=".encode_entities($hitGenome->{gtdbSpecies})));
+    }
+    push @svgLines,
+      qq[<text x="$xLabel" y="$yCenter" font-size="70%" dominant-baseline="middle">],
+      qq[<a xlink:href="$genomeURL"><title>$lineage</title><tspan font-style="italic">$showTax</tspan></a>];
     if (exists $hit->{genes} && exists $hit->{nGenomes}
         && scalar(@{ $hit->{genes} }) > 1) {
       # information about the collapsed group of genes
-      my $nGenes =  scalar(@{ $hit->{genes} });
+      my $nGenes = scalar(@{ $hit->{genes} });
       my $genesURL = encode_entities(addOrderToURL("genes.cgi?" . join("&", map "g=$_", @{ $hit->{genes} })));
       my ($nSpeciesGenomes) = getDbHandle()->selectrow_array(
-        qq{SELECT nGenomes FROM Taxon WHERE taxon = ? AND level = "species"}, {}, $species);
-      die "Unknown species $species" unless $nSpeciesGenomes;
-      my $strains = $hit->{nGenomes} > 1 ? "$hit->{nGenomes}/$nSpeciesGenomes strains " : "1/$nSpeciesGenomes strain";
-      push @lineage, qq{<a xlink:href="$genesURL"><title>$nGenes similar genes (over 70% identity and 90% overlap) in $strains of $speciesE</title><tspan font-size="90%">$nGenes genes in $strains</tspan></a>};
-    } else {
-      # link the strain to the genome
-      push @lineage, qq{<a xlink:href="$genomeURL"><title>strain</title>$strainE</a>};
+          qq{SELECT nGenomes FROM Taxon WHERE taxon = ? AND level = "species"}, {}, $hitGenome->{gtdbSpecies});
+      my $strains = $hit->{nGenomes} > 1 ? "$hit->{nGenomes}/$nSpeciesGenomes strains" : "1/$nSpeciesGenomes strain";
+      push @svgLines, qq[<a xlink:href="$genesURL"><title>$nGenes similar genes (over 70% identity and 90% overlap) in $strains of $hitGenome->{gtdbSpecies}</title>($nGenes genes)</a>];
     }
-  }
+    push @svgLines, "</text>";
+  } else {
+    # regular (not compact) view has a line at the top with %identity, bits, and lineage
+    $yAt += 25; # make space for genome label
+    my @lineage = ();
+    my @levels = ();
+    if (getOrder() eq "") {
+      @levels = qw{domain phylum class order family};
+    } else {
+      @levels = qw{family}; # skip order, is always the same
+    }
+    foreach my $level (@levels) {
+      my $taxon = $hitGenome->{"gtdb" . capitalize($level)};
+      my $taxonURL = encode_entities(addOrderToURL("taxon.cgi?level=$level&taxon=".uri_escape($taxon)));
+      my $taxShow;
+      my $taxTitle;
+      if ($level eq "domain") {
+        my $domainChar = $taxon eq "Bacteria" ? "B" : "A";
+        my $domainColor = $domainChar eq "B" ? "blue" : "green";
+        $taxShow = qq[<tspan font-style="bold" font-size="85%" fill="$domainColor">$domainChar</tspan>];
+        $taxTitle = $taxon;
+      } else {
+        my $size = getOrder() eq "" ? "70%" : "85%";
+        $taxShow = qq{<tspan font-size="$size">$taxon</tspan>};
+        $taxTitle = $level;
+      }
+      push @lineage, qq[<a xlink:href="$taxonURL"><title>$taxTitle</title>$taxShow</a>];
+    }
 
-  my $xLineage = $genesLeft + 150;
-  my $bitsShow = sprintf("%d bits", $hit->{bits});
-  # subdb e-values (from LAST) may be of the form 1.23e+03 instead of 1230
-  # (also, the bit values are missing the last digit of precision)
-  # So I tried changing them to dot 10^3, but it just takes up too much space
-  #if ($bitsShow =~ m/e[+]0(\d+)/) {
-  #  # &#xb7; is &middot; (but entities are not supported in SVG)
-  #  #$bitsShow =~ s!e[+]0(\d+)!&#xb7;10<tspan dy="-5" font-size="80%">$1</tspan> <tspan dy="5">bits</tspan>!;
-  #} else {
-  #  $bitsShow = "$bitsShow bits";
-  #}
-  push @svgLines,
-    qq[<text x="$genesLeft" y="$yAt" font-size="90%"><title>$hitDetails</title>${identity}% id, $bitsShow</text>],
-    qq[<text x="$xLineage" y="$yAt">],
-    join(" ",@lineage),
-    qq[</text>];
-  $yAt += 6;
-  $hit->{yTrack} = $yAt + 9; # remember gene location for the future. This is the middle of the track
+    # Add species and sometimes strain information to the lineage (gtdbSpecies includes the genus name)
+    # In top-level db, always show the species (but not strain) and link to the genome
+    # In sub-db, link species to the taxon, and show the strain, except if this is a collapsed group, show the
+    # #genes/#genomes instead.
+    my $species = $hitGenome->{gtdbSpecies};
+    my $speciesE = qq{<tspan font-style="italic">}
+      . encode_entities($hitGenome->{gtdbSpecies}) . qq[</tspan>];
+    my $strainE = encode_entities($hitGenome->{strain});
+    if (getOrder() eq "") {
+      push @lineage, qq{<a xlink:href="$genomeURL"><title>strain $strainE</title><tspan font-size="85%">$speciesE</tspan></a>};
+    } else {
+      my $speciesURL = addOrderToURL("taxon.cgi?level=species&taxon=".uri_escape($species));
+      push @lineage, qq[<a xlink:href="$speciesURL"><title>genus/species</title>$speciesE</a>];
+      if (exists $hit->{genes} && exists $hit->{nGenomes}
+          && scalar(@{ $hit->{genes} }) > 1) {
+        # information about the collapsed group of genes
+        my $nGenes =  scalar(@{ $hit->{genes} });
+        my $genesURL = encode_entities(addOrderToURL("genes.cgi?" . join("&", map "g=$_", @{ $hit->{genes} })));
+        my ($nSpeciesGenomes) = getDbHandle()->selectrow_array(
+          qq{SELECT nGenomes FROM Taxon WHERE taxon = ? AND level = "species"}, {}, $species);
+        die "Unknown species $species" unless $nSpeciesGenomes;
+        my $strains = $hit->{nGenomes} > 1 ? "$hit->{nGenomes}/$nSpeciesGenomes strains" : "1/$nSpeciesGenomes strain";
+        push @lineage, qq{<a xlink:href="$genesURL"><title>$nGenes similar genes (over 70% identity and 90% overlap) in $strains of $speciesE</title><tspan font-size="90%">($nGenes genes in $strains)</tspan></a>};
+      } else {
+        # link the strain to the genome
+        push @lineage, qq{<a xlink:href="$genomeURL"><title>strain</title>$strainE</a>};
+      }
+    } # end else has order
+    my $xLineage = $genesLeft + 150;
+    my $bitsShow = sprintf("%d bits", $hit->{bits});
+    # subdb e-values (from LAST) may be of the form 1.23e+03 instead of 1230
+    # (also, the bit values are missing the last digit of precision)
+    # So I tried changing them to dot 10^3, but it just takes up too much space
+    #if ($bitsShow =~ m/e[+]0(\d+)/) {
+    #  # &#xb7; is &middot; (but entities are not supported in SVG)
+    #  #$bitsShow =~ s!e[+]0(\d+)!&#xb7;10<tspan dy="-5" font-size="80%">$1</tspan> <tspan dy="5">bits</tspan>!;
+    #} else {
+    #  $bitsShow = "$bitsShow bits";
+    #}
+    push @svgLines,
+      qq[<text x="$genesLeft" y="$yAt" font-size="90%"><title>$hitDetails</title>${identity}% id, $bitsShow</text>],
+        qq[<text x="$xLineage" y="$yAt">],
+          join(" ",@lineage),
+            qq[</text>];
+    $yAt += 6;
+  } # end else not compact
+
+  $hit->{yTrack} = $yAt + $trackHeight/2; # remember gene location for the future. This is the middle of the track
   my $mid = ($hit->{begin} + $hit->{end})/2;
   my $showBegin = $mid - $ntShown/2;
   my $showEnd = $mid + $ntShown/2;
@@ -512,14 +569,18 @@ foreach my $hit (@$geneHits) {
     $s->{label} = $s->{locusTag};
     $s->{URL} = addOrderToURL("gene.cgi?locus=" . $s->{locusTag});
     $s->{color} = $locusTagToColor{$s->{locusTag}} || "lightgrey";
-    if ($s->{locusTag} eq $hit->{locusTag}
-        && ! (defined $gene && $gene->{locusTag} eq $hit->{locusTag})) {
-      my $aaLength = ($hit->{end} - $hit->{begin} + 1 - 3)/3;
-      $s->{bar} = { beginFraction => ($hit->{sBegin} - 1)/$aaLength,
-                    endFraction => min(1, $hit->{sEnd}/$aaLength),
-                    URL => "alignPair.cgi?${options}&locus2=" . $s->{locusTag},
-                    title => $hitDetails,
-                    color => $focalColor };
+    if ($s->{locusTag} eq $hit->{locusTag}) {
+      if ($compact) {
+        $s->{desc} .= " ($hitDetailsShort)";
+      } elsif (! (defined $gene && $gene->{locusTag} eq $hit->{locusTag})) {
+        # no bar for the query itself
+        my $aaLength = ($hit->{end} - $hit->{begin} + 1 - 3)/3;
+        $s->{bar} = { beginFraction => ($hit->{sBegin} - 1)/$aaLength,
+                      endFraction => min(1, $hit->{sEnd}/$aaLength),
+                      URL => "alignPair.cgi?${options}&locus2=" . $s->{locusTag},
+                      title => $hitDetails,
+                      color => $focalColor };
+      }
     }
   }
   my ($scaffoldLen) = getDbHandle->selectrow_array(
@@ -529,13 +590,14 @@ foreach my $hit (@$geneHits) {
                           'begin' => $showBegin, 'end' => $showEnd,
                           'kbWidth' => $kbWidth,
                           'xLeft' => $genesLeft,
+                          'geneHeight' => $trackHeight,
                           'yTop' => $yAt,
-                          # labels only for the top row
-                          'showLabel' => $hit->{locusTag} eq $geneHits->[0]{locusTag},
+                          # labels only for the top row, and only if not compact
+                          'showLabel' => $hit->{locusTag} eq $geneHits->[0]{locusTag} && ! $compact,
                           'invert' => $hit->{strand} eq "-",
                           'scaffoldLength' => $scaffoldLen);
   push @svgLines, $genesSvg{svg};
-  $yAt = max($yAt, $genesSvg{yMax}) + 2;
+  $yAt = max($yAt, $genesSvg{yMax}) + ($compact ? 0 : 2);
   $xMax = max($xMax, $genesSvg{xMax});
 }
 my %scaleBarSvg = scaleBarSvg('xLeft' => $genesLeft + ($xMax - $genesLeft) * 0.7,
@@ -543,6 +605,9 @@ my %scaleBarSvg = scaleBarSvg('xLeft' => $genesLeft + ($xMax - $genesLeft) * 0.7
 push @svgLines, $scaleBarSvg{svg};
 # Would be ~900; increase to make sure species name shows up in top level view on some browsers
 my $svgWidth = max($xMax, $scaleBarSvg{xMax}, 1000);
+if ($compact) { # do not truncate the taxon labels at the right
+  $svgWidth = max($xMax, $genesLeft + $kbWidth * $kbShown + 350);
+}
 my $svgHeight = $scaleBarSvg{yMax};
 
 # Now that the gene tracks are laid out, we have a position for each gene, so
@@ -590,13 +655,13 @@ if ($tree) {
       $nodeTitle{$node} = encode_entities(join(" ", $hit->{locusTag}, "from",
                                                $hitGenome->{gtdbSpecies}, $hitGenome->{strain}));
       $nodeURL{$node} = addOrderToURL("gene.cgi?locus=" . $hit->{locusTag});
-      $nodeRadius{$node} = 4;
+      $nodeRadius{$node} = $compact ? 3 : 4;
     } else {
       my $id = $tree->id($node);
       if (defined $id && $id ne "") {
-        $nodeRadius{$node} = 4;
+        $nodeRadius{$node} = $compact ? 3 : 4;
         $nodeTitle{$node} = sprintf("Support: %.2f", $tree->id($node));
-        $nodeColor{$node} = "lightgrey" if $id < 0.8;
+        $nodeColor{$node} = "darkgrey" if $id < 0.8;
       }
     }
   }
