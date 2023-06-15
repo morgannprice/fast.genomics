@@ -4,10 +4,10 @@ use Getopt::Long;
 use FindBin qw{$RealBin};
 
 my $nThreads = 1; # 1 thread per slice
+my $nAlignFactor = 4;
 # These defaults are as in mmseqs itself
 my $eValue = 0.001;
 my $limit = 300;
-my $nAlignFactor = 10;
 my $dbLoadMode = 1;
 my $sens = 5.7;
 
@@ -50,6 +50,7 @@ $maxAlign = $nAlignFactor * $limit if !defined $maxAlign;
 die "max-align must be >= limit\n" unless $maxAlign >= $limit;
 
 die "No such file: $inFaa\n" unless -e $inFaa;
+die "sensitivity must be positive\n" unless $sens > 0;
 
 open (my $fh, "<", "$pre.nSlices") || die "Cannot read $pre.nSlices\n";
 my $nSlices = <$fh>;
