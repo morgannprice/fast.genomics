@@ -126,7 +126,7 @@ sub hasHits($) {
   my ($seq) = @_;
   return 0 if $ENV{RECOMPUTE};
   my $seqDb = getSequenceDb();
-  $seqDb .= ".pin" if defined getSubDb();
+  $seqDb .= ".plusdb.pin" if defined getSubDb();
   return NewerThan(hitsFile($seq), $seqDb);
 }
 
