@@ -189,11 +189,12 @@ sub parseBLASTpHits($) {
   while (my $line = <$fhHits>) {
     chomp $line;
     next if $line eq "#" || $line =~ m/^# /;
-    my (undef, $subject, $identity, $alen, $mm, $gap, $qBegin, $qEnd, $sBegin, $sEnd, $eValue, $bits)
+    my ($query, $subject, $identity, $alen, $mm, $gap, $qBegin, $qEnd, $sBegin, $sEnd, $eValue, $bits)
       = split /\t/, $line;
     die "Cannot parse\n$line\nfrom blastp" unless defined $bits && $bits =~ m/\d/;
     $bits =~ s/^ *//;
-    push @out, { 'subject' => $subject, 'identity' => $identity/100,
+    push @out, { 'query' => $query, 'subject' => $subject,
+                 'identity' => $identity/100,
                  'alnLength' => $alen, 'nMismatch' => $mm, 'nGapOpens' => $gap,
                  'qBegin' => $qBegin, 'qEnd' => $qEnd,
                  'sBegin' => $sBegin, 'sEnd' => $sEnd,
