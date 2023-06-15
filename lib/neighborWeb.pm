@@ -22,7 +22,7 @@ use clusterBLASTp;
 
 our (@ISA,@EXPORT);
 @ISA = qw(Exporter);
-@EXPORT = qw{setQuietMode
+@EXPORT = qw{setQuietMode getQuietMode
              setOrder getOrder getSubDb addOrderToURL orderToHidden
              getDbHandle getTopDbHandle getSubDbHandle
              hasHits getHits hitsFile getTopHitOrder
@@ -43,8 +43,12 @@ our (@ISA,@EXPORT);
 # In quiet mode, do not print explanations about what computations are being run,
 # or HTML comments (which might raise the risk of time outs)
 my $quietMode = 0;
-sub setQuietMode {
+sub setQuietMode() {
   $quietMode = 1;
+}
+
+sub getQuietMode() {
+  return $quietMode;
 }
 
 # If the order is set to non-empty, then getDbHandle() will return a subdb handle.
@@ -138,6 +142,7 @@ sub getHits($) {
   my $subDb = getSubDb();
   my $hitsFile = hitsFile($seq);
 
+  print "\n<!-- hits file $hitsFile -->\n" unless $quietMode;
   if (defined $subDb) {
     return parseBLASTpHits($hitsFile)
       if hasHits($seq);
@@ -630,6 +635,7 @@ sub clusterGenes {
   my $md5 = md5_hex(join(",", @proteinIds));
   my $n = scalar(@proteinIds);
   my $clusterFile = "../tmp/hits/${n}_${md5}.cluster";
+  print "\n<!-- cluster file $clusterFile -->\n" unless $quietMode;
   my @proteinClusters;
   # RECOMPUTE environment variable is for testing
   if (-e $clusterFile && ! $ENV{RECOMPUTE}) {
