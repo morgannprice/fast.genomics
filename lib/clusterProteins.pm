@@ -8,8 +8,11 @@ require Exporter;
 use strict;
 use Digest::MD5 qw{md5_hex};
 use FindBin qw{$RealBin};
-use lib "../../web";
-use pbweb qw{runWhileCommenting runTimerHTML};
+use lib "$RealBin/lib";
+use clusterBLASTp qw{parseBLASTpHits};
+use neighborWeb qw{getQuietMode};
+use lib "$RealBin/../../PaperBLAST/lib";
+use pbweb qw{runWhileCommenting};
 
 our (@ISA,@EXPORT);
 @ISA = qw(Exporter);
@@ -113,7 +116,7 @@ sub parseLast($$) {
 
 # Given a reference to a hash of proteinId to sequence,
 # runs lastal, and returns a reference to
-# a list of hits from neighbor::parseLast()
+# a list of hits (from parseBLASTpHits)
 sub proteinsToSimilarity($$) {
   my ($proteinSeq, $fast) = @_;
   return [] if scalar(keys %$proteinSeq) == 0;
@@ -136,11 +139,13 @@ sub proteinsToSimilarity($$) {
   my $cmd;
   $cmd = "$lastdb -p $tmpLast $tmpFaa";
   system($cmd) == 0 || die "$cmd -- failed: $!";
-  $cmd = "$lastal -P 6 $tmpLast $tmpFaa > $tmpLast.out";
-  runWhileCommenting($cmd) == 0 || die "$cmd -- failed: $!";
-  open(my $fhHits, "<", "$tmpLast.out") || die "Cannot read $tmpLast.out";
-  my $hits = parseLast($fhHits, $fast);
-  close($fhHits) || die "Error reading $tmpLast.out";
+  $cmd = "$lastal -P 12 -f BlastTab $tmpLast $tmpFaa > $tmpLast.out";
+  if (neighborWeb::getQuietMode()) {
+    system($cmd) == 0 || die "$cmd -- failed: $!";
+  } else {
+    runWhileCommenting($cmd) == 0 || die "$cmd -- failed: $!";
+  }
+  my $hits = parseBLASTpHits("$tmpLast.out");
   unlink($tmpFaa);
   foreach my $suffix (qw{bck des prj sds ssp suf tis out}) {
     unlink("$tmpLast.$suffix");
@@ -157,14 +162,16 @@ sub clusterProteins($$) {
   my ($proteinSeq, $minCoverage) = @_;
   my $hits = proteinsToSimilarity($proteinSeq, 1); # 1 means fast
   my @hits = grep $_->{query} ne $_->{subject}, @$hits;
-  @hits = sort { $b->{score} <=> $a->{score} } @hits;
+  @hits = sort { $b->{bits} <=> $a->{bits} } @hits;
   my @clusters = (); # index to list of proteinIds
   my %cluster = (); # proteinId to index
   foreach my $hit (@hits) {
     my $query = $hit->{query};
     my $subject = $hit->{subject};
-    next unless $hit->{qEnd} - $hit->{qBegin} + 1 >= $minCoverage * $hit->{qLength}
-      || $hit->{sEnd} - $hit->{sBegin} + 1 >= $minCoverage * $hit->{sLength};
+    my $qLength = length($proteinSeq->{$query}) || die "Unknown query $query";
+    my $sLength = length($proteinSeq->{$subject}) || die "Unknown subject $subject";
+    next unless $hit->{qEnd} - $hit->{qBegin} + 1 >= $minCoverage * $qLength
+      || $hit->{sEnd} - $hit->{sBegin} + 1 >= $minCoverage * $sLength;
     if (exists $cluster{$query} && exists $cluster{$subject}) {
       # nothing ot do if already in the same cluster
       unless ($cluster{$query} eq $cluster{$subject}) {
