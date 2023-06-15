@@ -175,11 +175,10 @@ sub saveMMSeqsHits($) {
 
   my $tmpOut = "$hitsFile.$$";
   my $startTime = [gettimeofday()];
-  my $mmseqsSens = length($seq) <= 150 ? 7 : 6;
+  my $mmseqsSens = lengthToMMSeqsSens(length($seq));
   my ($nGenomes) = getTopDbHandle()->selectrow_array("SELECT COUNT(*) FROM Genome");
-  my $maxSeqs = int(1.5 * $nGenomes + 0.5);
   my $cmd = "../bin/searchSliced.pl -in $faaFile -sliced $mmseqsDb -out $tmpOut"
-    . " -max-seq $maxSeqs -limit $nGenomes -db-load-mode 2 -s $mmseqsSens";
+    . " -limit $nGenomes -db-load-mode 2 -s $mmseqsSens";
   if ($quietMode) {
     system($cmd) == 0 || die "Error running $cmd -- $!";
   } else {
