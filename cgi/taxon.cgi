@@ -100,7 +100,9 @@ if ($level eq "species" || $taxObj->{nGenomes} == 1) {
       p(a({-href => addOrderToURL("genome.cgi?gid=" . $genome->{gid})},
           i(encode_entities($genome->{gtdbSpecies})), encode_entities($genome->{strain})));
   } else {
-    print h3("Genomes"), start_ul();
+    print
+      h3("$taxObj->{nGenomes} Genomes"),
+      start_ul();
     foreach my $genome (@$genomes) {
       print li(a({-href => addOrderToURL("genome.cgi?gid=" . $genome->{gid})},
                  i(encode_entities($genome->{gtdbSpecies})), encode_entities($genome->{strain})));
