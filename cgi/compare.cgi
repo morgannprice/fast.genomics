@@ -81,8 +81,8 @@ else {
     finish_page();
   }
   unless (hasHits($seq)) {
-    print p("Sorry, first protein does not have homologs yet");
-    print a({-href => "findHomologs.cgi?$options"}, "Find homologs for the first protein");
+    print p("Sorry, homologs for the first protein have not been computed yet");
+    print a({-href => "findHomologs.cgi?$options"}, "Compute homologs for the first protein");
     finish_page();
   }
 }
@@ -175,18 +175,6 @@ if ($tsv) {
     finish_page();
   }
 }
-unless (hasHits($seq2)) {
-  die "No homologs for second protein yet\n" if $tsv;
-  print p("Sorry, second protein does not have homologs yet");
-  print a({-href => "findHomologs.cgi?$options2"}, "Find homologs for the second protein");
-  finish_page();
-}
-my $hits2 = getHits($seq2);
-if (scalar(@$hits2) == 0) {
-  exit(0) if $tsv;
-  print p("Sorry, no homologs were found for the second protein");
-  finish_page;
-}
 
 my $baseURL = "compare.cgi?${options}";
 if ($gene2) {
@@ -194,6 +182,19 @@ if ($gene2) {
 } else {
   my $seqDesc2E = encode_entities($seqDesc2);
   $baseURL .= "&seqDesc2=$seqDesc2E&seq2=$seq2";
+}
+
+unless (hasHits($seq2)) {
+  die "No homologs for second protein yet\n" if $tsv;
+  print p("Sorry, homologs for the second protein have not been computed yet");
+  print a({-href => "findHomologs.cgi?${options2}&compare1=" . uri_escape($options) }, "Compute homologs for the second protein");
+  finish_page();
+}
+my $hits2 = getHits($seq2);
+if (scalar(@$hits2) == 0) {
+  exit(0) if $tsv;
+  print p("Sorry, no homologs were found for the second protein");
+  finish_page;
 }
 
 if ($tsv) {

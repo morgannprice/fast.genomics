@@ -17,6 +17,9 @@ use neighborWeb;
 # locus (a locus tag in the database), or seqDesc and seq
 # Optional arguments:
 # order (which subdb to use)
+# compare1 -- for linking "back" to compare.cgi
+#   compare1 is the compare.cgi parameters for the first gene or sequence;
+#   this locus/seqDesc/seq will be the second gene or sequence
 
 my $cgi = CGI->new;
 setOrder(param('order'));
@@ -81,6 +84,15 @@ if (getOrder() eq "") {
   print p("Or find",
           a({-href => "findHomologs.cgi?${options}" },
             "homologs in diverse bacteria and archaea"));
+}
+
+if (param('compare1')) {
+  my $options1 = param('compare1');
+  my $options2 = defined $gene ? "locus2=".$gene->{locusTag}
+    : "seqDesc2=" . uri_escape($seqDesc) . "&seq2=" . $seq;
+  print p("Back to",
+          a({-href => addOrderToURL("compare.cgi?${options1}&${options2}")},
+            "compare gene presence/absence")), "\n";
 }
 
 my $hitsFile = hitsFile($seq);
