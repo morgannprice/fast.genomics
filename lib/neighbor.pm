@@ -6,7 +6,7 @@ use strict;
 our (@ISA,@EXPORT);
 @ISA = qw(Exporter);
 @EXPORT = qw(parseTaxString readMMSeqsHits estimateTopScore cumsum featuresToGenes orderToSubName
-             csvQuote);
+             csvQuote lengthToMMSeqsSens);
 
 # Returns a hash of d/p/c/o/f/g/s to value
 # (any of which could be missing),
@@ -162,6 +162,15 @@ sub csvQuote($) {
   return $in unless $in =~ m/"/;
   $in =~ s/"/""/g;
   return '"' . $in . '"';
+}
+
+# Choose sensitivity for MMseqs2 given the number of amino acids in the query
+sub lengthToMMSeqsSens($) {
+  my ($len) = @_;
+  return 7.5 if $len <= 100;
+  return 7.0 if $len <= 150;
+  return 6.0 if $len <= 800;
+  return 5.7;
 }
 
 1;
