@@ -487,9 +487,19 @@ foreach my $hit (@$geneHits) {
     }
   }
 
-  my $xLineage = $genesLeft + 135;
+  my $xLineage = $genesLeft + 150;
+  my $bitsShow = sprintf("%d bits", $hit->{bits});
+  # subdb e-values (from LAST) may be of the form 1.23e+03 instead of 1230
+  # (also, the bit values are missing the last digit of precision)
+  # So I tried changing them to dot 10^3, but it just takes up too much space
+  #if ($bitsShow =~ m/e[+]0(\d+)/) {
+  #  # &#xb7; is &middot; (but entities are not supported in SVG)
+  #  #$bitsShow =~ s!e[+]0(\d+)!&#xb7;10<tspan dy="-5" font-size="80%">$1</tspan> <tspan dy="5">bits</tspan>!;
+  #} else {
+  #  $bitsShow = "$bitsShow bits";
+  #}
   push @svgLines,
-    qq[<text x="$genesLeft" y="$yAt" font-size="90%"><title>$hitDetails</title>${identity}% id, $hit->{bits} bits</text>],
+    qq[<text x="$genesLeft" y="$yAt" font-size="90%"><title>$hitDetails</title>${identity}% id, $bitsShow</text>],
     qq[<text x="$xLineage" y="$yAt">],
     join(" ",@lineage),
     qq[</text>];
