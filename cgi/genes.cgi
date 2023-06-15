@@ -94,7 +94,7 @@ if ($format eq "blastp" && @proteinGenes > 1) {
   # Remove self htis
   @hits  = grep $_->[0] ne $_->[1], @hits;
   if (@hits == 0) {
-    print p("No significant similarities were found (E < 0.001)");
+    print p("No significant similarities (E < 0.001) were found");
   } else {
     my %proteinGenes = map { $_->{locusTag} => $_ } @proteinGenes;
     print
