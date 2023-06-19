@@ -299,8 +299,8 @@ foreach my $iCluster (0..(scalar(@$clusters)-1)) {
   }
 }
 # From colorbrewer2.org -- qualitative palette, n=12 (the maximum), and save the 1st color
-# for the query and its homologs
-my $focalColor = '#a6cee3';
+# for the alignment bar
+my $focalColor = "white";
 my @clusterColorSet = ('#1f78b4','#b2df8a','#33a02c','#fb9a99','#e31a1c',
               '#fdbf6f','#ff7f00','#cab2d6','#6a3d9a','#ffff99','#b15928');
 # Add hatch patterns for more effective colors
@@ -570,16 +570,17 @@ foreach my $hit (@$geneHits) {
     $s->{URL} = addOrderToURL("gene.cgi?locus=" . $s->{locusTag});
     $s->{color} = $locusTagToColor{$s->{locusTag}} || "lightgrey";
     if ($s->{locusTag} eq $hit->{locusTag}) {
-      if ($compact) {
-        $s->{desc} .= " ($hitDetailsShort)";
-      } elsif (! (defined $gene && $gene->{locusTag} eq $hit->{locusTag})) {
-        # no bar for the query itself
+      if (! (defined $gene && $gene->{locusTag} eq $hit->{locusTag})) {
+        # no bar (or %identity hover text) for the query itself
         my $aaLength = ($hit->{end} - $hit->{begin} + 1 - 3)/3;
         $s->{bar} = { beginFraction => ($hit->{sBegin} - 1)/$aaLength,
                       endFraction => min(1, $hit->{sEnd}/$aaLength),
                       URL => "alignPair.cgi?${options}&locus2=" . $s->{locusTag},
-                      title => $hitDetails,
-                      color => $focalColor };
+                      # in compact mode, difficult to click on one vs. other so have the same
+                      # information in the hover text for the bar as for the ORF
+                      title => $compact ? $s->{desc}. " ($hitDetailsShort, see alignment)": $hitDetails,
+                      color => '#a6cee3' };
+        $s->{desc} .= " ($hitDetailsShort)";
       }
     }
   }
