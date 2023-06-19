@@ -105,7 +105,8 @@ sub genesSvg {
       @points = ([$xStart,$y2], [$xStart,$y1], [$xStop,$geneYMid]);
     } else {
       my $xMid = $xStart < $xStop ? $xStop - $arrowWidth : $xStop + $arrowWidth;
-      @points = ([$xStart,$y2], [$xStart,$y1], [$xMid,$y1], [$xStop,$geneYMid], [$xMid, $y2]);
+      @points = ([$xStart,$y2], [$xStart,$y1], [$xMid,$y1],
+                 [$xStop,$geneYMid], [$xMid, $y2]);
     }
     my $pointstr = join(" ", map { $_->[0].",".$_->[1] } @points);
     my $color = $gene->{color} || "white";
@@ -138,7 +139,8 @@ sub genesSvg {
       my ($xBar1, $xBar2);
       $xBar1 = $xStart + $bar->{beginFraction} * ($xStop-$xStart);
       $xBar2 = $xStart + $bar->{endFraction} * ($xStop-$xStart);
-      my $yBar = $yTop + $geneHeight + 4;
+      #my $yBar = $yTop + $geneHeight + 4;
+      my $yBar = ($y1+$y2)/2;
       my $barColor = $bar->{color} || "darkgrey";
       my $line  = qq[<line x1="$xBar1" x2="$xBar2" y1="$yBar" y2="$yBar" style="stroke: $barColor; stroke-width: 3;">];
       $line .= "<title>" . encode_entities($bar->{title}) . "</title>"
@@ -149,6 +151,8 @@ sub genesSvg {
         $line = qq[<a xlink:href="$URL">$line</a>];
       }
       push @svgLines, $line;
+      # re-draw the lines on top
+      push @svgLines, qq{<polygon points="$pointstr" style="fill:none; stroke:black; stroke-width:1;" />};
     }
   }
 
