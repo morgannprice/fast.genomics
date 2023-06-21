@@ -9,13 +9,13 @@ use lib "$RealBin/../../PaperBLAST/lib";
 use FetchAssembly qw{ParseNCBIFeatureFile};
 use pbutils qw{ReadFastaEntry ReadTable};
 
-my $nSlices = 8;
+my $kmerSize = 0; # kmer size for mmseqs index
 my $usage = <<END
 build.pl -genomes genomes.tsv [ -fetched genomes.tsv.fetched ] -in indir -out outdir
 
-Creates the neighbor database, including the mysql database
-(neighbor.db), a big fasta file (neighbor.faa.gz), and a sliced mmseqs
-index (neighbor.sliced*), in the output directory.
+Creates the fast.genomics database, including the mysql database
+(neighbor.db), a big fasta file (neighbor.faa.gz), and an mmseqs
+database (mmseqsdb*), in the output directory.
 
 The genomes table must include the fields fetch, (gtdb) accession,
 ncbi_assembly_name, gtdb_taxonomy, ncbi_taxonomy, and
@@ -27,7 +27,8 @@ More arguments (optional):
 -test -- test mode: build tab-delimited tables and faa file, but
    do not build the mmseqs indexes or the sqlite3 database,
    or delete the tab-delimited tables, or compress the faa file
--slices $nSlices -- how many slices to use for the mmseqs db
+-k $kmerSize -- kmer size for mmseqs index
+  (0 means mmseqs chooses)
 -quiet
 END
 ;
@@ -39,7 +40,7 @@ die $usage
                     'in=s' => \$inDir,
                     'out=s' => \$outDir,
                     'test' => \$test,
-                    'slices=i' => \$nSlices,
+                    'kmer=i' => \$kmerSize,
                     'quiet' => \$quiet)
   && defined $genomeFile
   && defined $inDir
@@ -47,10 +48,14 @@ die $usage
   && @ARGV == 0;
 $fetchedFile = "$genomeFile.fetched" if !defined $fetchedFile;
 $quiet = 1 if defined $quiet;
+die "Invalid kmer size -- must be 0, 6, or 7\n"
+  unless $kmerSize == 0 || ($kmerSize >= 6 && $kmerSize <= 7);
 
 die "No such directory: $inDir\n" unless -d $inDir;
 die "No such directory: $outDir\n" unless -d $outDir;
-die "nSlices is out of range\n" unless $nSlices >= 1 && $nSlices <= 100;
+
+my $mmseqs = "$RealBin/mmseqs";
+die "No such executable: $mmseqs\n" unless -x $mmseqs;
 
 my @genomes = ReadTable($genomeFile,
   qw[fetch accession ncbi_assembly_name gtdb_taxonomy ncbi_taxonomy ncbi_strain_identifiers]);
@@ -64,7 +69,7 @@ print STDERR "Genomes with fetched assemblies: " . scalar(@genomes) . "\n"
 die "No genomes to load\n" if @genomes == 0;
 
 my $dbFile = "$outDir/neighbor.db";
-my $slicedDb = "$outDir/neighbor.sliced";
+my $mmseqsDb = "$outDir/mmseqsdb";
 if (!defined $test) {
   unlink($dbFile);
   my $sqlFile = "$RealBin/../lib/neighbor.sql";
@@ -226,11 +231,19 @@ END
 ;
 close(SQLITE) || die "Error running sqlite3 import commands\n";
 
-print STDERR "Creating and indexing the sliced mmseqs database\n" unless $quiet;
-my $cmd = "$RealBin/buildSliced.pl -in $faaOut -slices $nSlices -out $slicedDb";
-system($cmd) == 0
-  || die "Error running buildSliced.pl: $!\nCommand: $cmd\n";
-print STDERR "Finished building:\nsqlite3 $dbFile\nsliceddb $slicedDb\n" unless $quiet;
+print STDERR "Creating the mmseqs database\n" unless $quiet;
+my $tmpDir = ($ENV{TMPDIR} || "/tmp") . "/build.$$";
+mkdir($tmpDir) || die "Cannot mkdir $tmpDir\n";
+my @cmds = ("$mmseqs createdb $faaOut $mmseqsDb",
+            "$mmseqs createindex $mmseqsDb $tmpDir -k $kmerSize",
+            "$mmseqs touchdb $mmseqsDb");
+foreach my $cmd (@cmds) {
+  print STDERR "Running: $cmd\n" unless $quiet;
+  system($cmd) == 0 || die "Command\n$cmd\nfailed: $!";
+}
+system("rm -Rf $tmpDir");
+
+print STDERR "Finished building:\nsqlite3 $dbFile\nmmseqs $mmseqsDb\n" unless $quiet;
 
 # Remove tab-delimited imports
 foreach my $file (values %files) {

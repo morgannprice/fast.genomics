@@ -122,7 +122,7 @@ sub hitsFile($) {
 
 sub getSequenceDb {
   my $subDb = getSubDb();
-  return "../data/neighbor.sliced" if !defined $subDb;
+  return "../data/mmseqsdb" if !defined $subDb;
   return "../data/${subDb}/cluster.faa";
 }
 
@@ -182,8 +182,11 @@ sub saveMMSeqsHits($) {
   my $startTime = [gettimeofday()];
   my $mmseqsSens = lengthToMMSeqsSens(length($seq));
   my ($nGenomes) = getTopDbHandle()->selectrow_array("SELECT COUNT(*) FROM Genome");
-  my $cmd = "../bin/searchSliced.pl -in $faaFile -sliced $mmseqsDb -out $tmpOut"
-    . " -limit $nGenomes -db-load-mode 2 -s $mmseqsSens";
+  # Switched from searchSliced.pl to mmseqsParallel.pl
+  #my $cmd = "../bin/searchSliced.pl -in $faaFile -sliced $mmseqsDb -out $tmpOut"
+  #        . " -limit $nGenomes -db-load-mode 2 -s $mmseqsSens";
+  my $cmd = "../bin/mmseqsParallel.pl -in $faaFile -db $mmseqsDb -out $tmpOut"
+    . " -limit $nGenomes -s $mmseqsSens -nCPU 10";
   if ($quietMode) {
     system($cmd) == 0 || die "Error running $cmd -- $!";
   } else {
@@ -195,7 +198,7 @@ sub saveMMSeqsHits($) {
   rename($tmpOut, $hitsFile) || die "Renaming $tmpOut to $hitsFile failed";
   unlink($faaFile);
   my $elapsed = tv_interval($startTime);
-  print CGI::p(sprintf("mmseqs2 finished in %.1f seconds", $elapsed))."\n"
+  print CGI::p(sprintf("mmseqs2 (parallel) finished in %.1f seconds", $elapsed))."\n"
     unless $quietMode;
 }
 
