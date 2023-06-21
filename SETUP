@@ -27,14 +27,16 @@ The PaperBLAST code base must be installed in the parent directory --
 i.e., if the cgi scripts are in parent/neighbor/cgi
 then the PaperBLAST libraries must be in parent/PaperBLAST/lib
 
-The data/ subdirectory should include neighbor.db, neighbor.sliced,
-neighbor.sliced*, and neighbor.faa.gz (created by the bin/build.pl
-script). It can also have a 1-line file, gtdb.version, to show which
-release of GTDB it is based on.
+The data/ subdirectory must include neighbor.db, mmseqsdb*, and
+neighbor.faa.gz (created by the bin/build.pl script). It can also have
+a 1-line file, gtdb.version, to show which release of GTDB it is based
+on.
 
-Important for performance: use
-  bin/touchSliced.pl data/neighbor.sliced
-to make sure that mmseq's indices are in memory.
+For best performance, run build.pl with -k 6. And run
+  mmseqs touchdb data/mmseqsdb
+to make sure that mmseq's index is in main memory. build.pl runs this
+command, but you might need to rerun it periodically to keep the index
+in memory.
 
 The bin directory must include the mmseqs2 executable (named mmseqs)
 
