@@ -167,9 +167,10 @@ sub csvQuote($) {
 # Choose sensitivity for MMseqs2 given the number of amino acids in the query
 sub lengthToMMSeqsSens($) {
   my ($len) = @_;
-  return 7.5 if $len <= 100;
-  return 7.0 if $len <= 150;
-  return 6.0 if $len <= 800;
+  return 7.5 if $len <= 150;
+  return 7.0 if $len <= 250;
+  return 6.25 if $len <= 350;
+  return 6.0 if $len <= 650;
   return 5.7;
 }
 
