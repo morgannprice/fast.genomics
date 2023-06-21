@@ -303,7 +303,7 @@ sub clusteredBLASTp {
   return [] if @$hits1 == 0;
   my @clusterIds = removeDuplicates(map $_->{subject}, @$hits1);
   splice @clusterIds, $nMaxHits1;
-  print "<small>Processing " . scalar(@clusterIds) . " clusters and re-running BLASTp.</small>\n"
+  print "<small>Processing " . scalar(@clusterIds) . " clusters and running lastal.</small>\n"
     unless $quiet;
   my $proteinIds = expandByClusters(\@clusterIds, $dbh);
   splice @$proteinIds, $nMaxHits2;

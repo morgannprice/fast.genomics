@@ -101,11 +101,9 @@ HREF="https://www.ncbi.nlm.nih.gov/refseq/">RefSeq</A>.
 <P><i>Fast.genomics</i> uses <A
 HREF="https://github.com/soedinglab/MMseqs2">mmseqs2</A> to find
 homologs for a protein sequence of interest. This usually takes a few
-seconds. To speed up the search, fast.genomics splits the protein database into pieces,
-which allows parallel
-analysis of a single query.
-Fast.genomics also keeps the indexes in memory.
-The protein of interest need not be in fast.genomics' database.
+seconds. To speed up the search, fast.genomics keeps the mmseqs2 index
+in memory and runs the alignment step in parallel. The protein of
+interest need not be in the fast.genomics database.
 
 <P>Once the homologs are identified, fast.genomics can quickly show:
 
