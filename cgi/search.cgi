@@ -103,7 +103,7 @@ HREF="https://github.com/soedinglab/MMseqs2">mmseqs2</A> to find
 homologs for a protein sequence of interest. This usually takes a few
 seconds. To speed up the search, fast.genomics keeps the mmseqs2 index
 in memory and runs the alignment step in parallel. The protein of
-interest need not be in the fast.genomics database.
+interest need not be in the <i>fast.genomics</i> database.
 
 <P>Once the homologs are identified, fast.genomics can quickly show:
 
@@ -128,7 +128,8 @@ END
 and up to 10 genomes per species.
 The per-order database will often include many more close homologs than the top-level
 database (<A HREF="neighbors.cgi?locus=ING2E5A_RS06865&order=Bacteroidales&hitType=topCollapse&tree=1">example</A>).
-You can reach the per-order database from the taxon or genome pages.
+You can reach the per-order database from the taxon or genome pages. Also, most gene pages have a link to
+search for homologs within that genome's order.
 END
 ;
   } else {
@@ -144,15 +145,19 @@ END
 
 <P><i>Fast.genomics</i> also has database for each order, including a
 database with $nSubGenomes genomes of $order and $nSubProteins proteins. Up to 10 genomes of each
-species are included. To speed up searches for homologs,
-<i>fast.genomics</i> uses a pre-computed clustering (from
-<A HREF="https://github.com/weizhongli/cdhit/wiki">CD-HIT</A>) of all of the proteins in $order.
-First, <i>fast.genomics</i> searches against $nSubClusters clusters (using protein BLAST and E &le; 1);
-then it compares the query to all members of those clusters (using protein BLAST and E &le; 0.001).
-
+species are included.
 END
 ;
   }
+print <<END
+<P>To speed up searches for homologs within an order,
+<i>fast.genomics</i> uses a pre-computed clustering (from
+<A HREF="https://github.com/weizhongli/cdhit/wiki">CD-HIT</A>) of all of the proteins in that order.
+First, <i>fast.genomics</i> searches against clusters (using protein BLAST and E &le; 0.001);
+then it compares the query to all members of those clusters (using
+<A HREF="https://genome.cshlp.org/content/21/3/487">lastal</A> and E &le; 0.001, with e-values rescaled).
+END
+;
   my ($nPhyla) = getTopDbHandle()->selectrow_array("SELECT COUNT(DISTINCT gtdbPhylum) FROM Genome");
   $nPhyla = commify($nPhyla);
   my ($nClasses) = getTopDbHandle()->selectrow_array("SELECT COUNT(DISTINCT gtdbClass) FROM Genome");
