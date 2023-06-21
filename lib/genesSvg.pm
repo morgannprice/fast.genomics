@@ -72,7 +72,7 @@ sub genesSvg {
     $lineRight = $xRight;
   }
   push @svgLines,
-    qq[<line x1="$lineLeft" y1="$geneYMid" x2="$lineRight" y2="$geneYMid" style="stroke:darkgrey; stroke-width:1;"/>];
+    qq[<line x1="$lineLeft" y1="$geneYMid" x2="$lineRight" y2="$geneYMid" style="stroke:#444444;"/>];
   my $showPlus = $invert ? "-" : "+";
   foreach my $gene (@genes) {
     my $x1 = posToX($gene->{begin}, $xLeft, $begin, $end, $ntWidth, $invert);

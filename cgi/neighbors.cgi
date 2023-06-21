@@ -579,7 +579,8 @@ foreach my $hit (@$geneHits) {
                       # in compact mode, difficult to click on one vs. other so have the same
                       # information in the hover text for the bar as for the ORF
                       title => $compact ? $s->{desc}. " ($hitDetailsShort, see alignment)": $hitDetails,
-                      color => '#a6cee3' };
+                      # The original color '#a6cee3' was too close to white, use a cyan instead
+                      color => '#44DDDD'  };
         $s->{desc} .= " ($hitDetailsShort)";
       }
     }
