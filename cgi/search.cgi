@@ -155,7 +155,7 @@ print <<END
 <A HREF="https://github.com/weizhongli/cdhit/wiki">CD-HIT</A>) of all of the proteins in that order.
 First, <i>fast.genomics</i> searches against clusters (using protein BLAST and E &le; 0.001);
 then it compares the query to all members of those clusters (using
-<A HREF="https://genome.cshlp.org/content/21/3/487">lastal</A> and E &le; 0.001, with e-values rescaled).
+<A HREF="https://genome.cshlp.org/content/21/3/487">lastal</A> and E &le; 0.001, with E-values rescaled).
 END
 ;
   my ($nPhyla) = getTopDbHandle()->selectrow_array("SELECT COUNT(DISTINCT gtdbPhylum) FROM Genome");
