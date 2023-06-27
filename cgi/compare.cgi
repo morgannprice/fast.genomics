@@ -662,8 +662,8 @@ if ($nInBoth > $nSame + 1) {
   # Show a scatterplot of ratio1 vs. ratio2 (or below 0 if no hit)
   my $below = 0.1; # space at the bottom of non-hits, so you can see them better
   my $plot = svgPlot->new(xRange => [-$below,1], yRange => [-$below,1],
-                          width => 500, height => 500,
-                          margin => [3,3,3,3]);
+                          width => 525, height => 500,
+                          margin => [3,3,3,4]);
   my @ticks = (0,0.2,0.4,0.6,0.8,1.0);
   print qq{</TD><TD valign="top">};
   print $plot->start();
