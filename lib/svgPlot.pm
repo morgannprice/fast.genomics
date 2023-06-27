@@ -10,7 +10,7 @@ use HTML::Entities;
 # Options:
 #   width, height,
 #   xLeft, yTop,
-#   margin # bottom left right bottom (lines)
+#   margin # bottom left top right (lines)
 # Returns an svgPlot object
 sub new {
   my $class = shift;
