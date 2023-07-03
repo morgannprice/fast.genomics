@@ -220,7 +220,7 @@ if ($format eq "") {
         "&nbsp;",
         qq{<INPUT name='tree' TYPE='checkbox' $treeChecked><label for='tree'>Show tree?</label>},
         "&nbsp;",
-        'Style:',
+        'Taxonomy:',
         popup_menu(-name => 'compact', -values => [1,0], -default => ! $compact,
                    -labels => {'0' => 'detailed', '1' => 'compact'}),
         "&nbsp;",
@@ -463,6 +463,7 @@ foreach my $hit (@$geneHits) {
     } else {
       $showTax = $hitGenome->{"gtdbSpecies"};
     }
+    $showTax = substr($showTax, 0, 45)."." if length($showTax) > 45;
     $showTax = encode_entities($showTax);
     my $xLabel = $genesLeft + $kbWidth * $kbShown + 5;
     my $yCenter = $yAt + $trackHeight/2;
@@ -482,8 +483,11 @@ foreach my $hit (@$geneHits) {
       my $genesURL = encode_entities(addOrderToURL("genes.cgi?" . join("&", map "g=$_", @{ $hit->{genes} })));
       my ($nSpeciesGenomes) = getDbHandle()->selectrow_array(
           qq{SELECT nGenomes FROM Taxon WHERE taxon = ? AND level = "species"}, {}, $hitGenome->{gtdbSpecies});
-      my $strains = $hit->{nGenomes} > 1 ? "$hit->{nGenomes}/$nSpeciesGenomes strains" : "1/$nSpeciesGenomes strain";
-      push @svgLines, qq[<a xlink:href="$genesURL"><title>$nGenes similar genes (over 70% identity and 90% overlap) in $strains of $hitGenome->{gtdbSpecies}</title>($nGenes genes)</a>];
+      my $strainsString = $hit->{nGenomes} > 1 ? "$hit->{nGenomes}/$nSpeciesGenomes strains" : "1/$nSpeciesGenomes strain";
+      my $nGenesLabel = "$hit->{nGenomes}/$nSpeciesGenomes "
+        . ($nSpeciesGenomes == 1 ? "strain" : "strains");
+      $nGenesLabel = "$nGenes in $nGenesLabel" if $nGenes != $hit->{nGenomes};
+      push @svgLines, qq[<a xlink:href="$genesURL"><title>$nGenes similar genes (over 70% identity and 90% overlap) in $strainsString of $hitGenome->{gtdbSpecies}</title>($nGenesLabel)</a>];
     }
     push @svgLines, "</text>";
   } else {
@@ -519,8 +523,10 @@ foreach my $hit (@$geneHits) {
     # In sub-db, link species to the taxon, and show the strain, except if this is a collapsed group, show the
     # #genes/#genomes instead.
     my $species = $hitGenome->{gtdbSpecies};
+    my $speciesShort = $species;
+    $speciesShort = substr($speciesShort, 0, 45) . "." if length($species) > 45;
     my $speciesE = qq{<tspan font-style="italic">}
-      . encode_entities($hitGenome->{gtdbSpecies}) . qq[</tspan>];
+      . encode_entities($speciesShort) . qq[</tspan>];
     my $strainE = encode_entities($hitGenome->{strain});
     if (getOrder() eq "") {
       push @lineage, qq{<a xlink:href="$genomeURL"><title>strain $strainE</title><tspan font-size="85%">$speciesE</tspan></a>};
@@ -608,7 +614,7 @@ push @svgLines, $scaleBarSvg{svg};
 # Would be ~900; increase to make sure species name shows up in top level view on some browsers
 my $svgWidth = max($xMax, $scaleBarSvg{xMax}, 1000);
 if ($compact) { # do not truncate the taxon labels at the right
-  $svgWidth = max($xMax, $genesLeft + $kbWidth * $kbShown + 350);
+  $svgWidth = max($xMax, $genesLeft + $kbWidth * $kbShown + 400);
 }
 my $svgHeight = $scaleBarSvg{yMax};
 
