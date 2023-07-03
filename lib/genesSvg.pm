@@ -121,19 +121,8 @@ sub genesSvg {
     $title = "(extends beyond this view) $title" if $truncated;
     push @svgLines, qq{<a xlink:href="$URL">},
       "<title>$title</title>",
-      $poly;
-    if ($showLabel && defined $gene->{label} && $gene->{label} ne "") {
-      my $tag = $gene->{label};
-      $tag =~ s/^.*_/_/; # shorten so that it is likely to fit
-      $tag =~ s/[<>'"]//g;
-      if (abs($xStop-$xStart) >= length($tag) * 9) {
-        my $xMid = ($xStart+$xStop)/2;
-        push @svgLines,
-          qq[<text x="$xMid" y="$geneYMid" text-anchor="middle" dominant-baseline="middle" font-size="smaller" >],
-          qq[$tag</text>];
-      }
-    }
-    push @svgLines, "</a>";
+      $poly, "</a>";
+    # Bar below label
     if (exists $gene->{bar} && ! $truncated) {
       my $bar = $gene->{bar};
       my ($xBar1, $xBar2);
@@ -153,6 +142,20 @@ sub genesSvg {
       push @svgLines, $line;
       # re-draw the lines on top
       push @svgLines, qq{<polygon points="$pointstr" style="fill:none; stroke:black; stroke-width:1;" />};
+    }
+    if ($showLabel && defined $gene->{label} && $gene->{label} ne "") {
+      my $tag = $gene->{label};
+      $tag =~ s/^.*_/_/; # shorten so that it is likely to fit
+      $tag =~ s/[<>'"]//g;
+      if (abs($xStop-$xStart) >= length($tag) * 9) {
+        my $xMid = ($xStart+$xStop)/2;
+        push @svgLines,
+          qq{<a xlink:href="$URL">},
+          qq[<text x="$xMid" y="$geneYMid" text-anchor="middle" dominant-baseline="middle" font-size="smaller" >],
+          qq{<title>$title</title>},
+          qq[$tag</text>],
+          "</a>";
+      }
     }
   }
 
