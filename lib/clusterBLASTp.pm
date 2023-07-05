@@ -304,7 +304,7 @@ sub clusteredBLASTp {
   my @clusterIds = removeDuplicates(map $_->{subject}, @$hits1);
   splice @clusterIds, $nMaxHits1;
   print "<small>Processing " . scalar(@clusterIds) . " clusters and running lastal.</small>\n"
-    unless $quiet;
+      unless $quiet;
   my $proteinIds = expandByClusters(\@clusterIds, $dbh);
   splice @$proteinIds, $nMaxHits2;
   print "<!-- expanded to " . scalar(@$proteinIds) . " -->\n" unless $quiet;
@@ -322,10 +322,13 @@ sub clusteredBLASTp {
   foreach my $x ($lastal, $lastdb) {
     die "No such executable: $x\n" unless -x $x;
   }
+  my $maxCand = $nMaxHits2;
+  $maxCand = scalar(@$proteinIds) if scalar(@$proteinIds) < $nMaxHits2;
   my @lastCmds = ("$lastdb -P $nCPUs -p $tmpPre.lastdb $tmpPre.faa",
-                  "$lastal -m $nMaxHits2 -f BlastTab -P $nCPUs $tmpPre.lastdb $inFile > $tmpPre.hits");
+                  "$lastal -m $maxCand -f BlastTab -P $nCPUs $tmpPre.lastdb $inFile > $tmpPre.hits");
   foreach my $cmd (@lastCmds) {
-    system($cmd) == 0 || die "last failed:\n$cmd\n$!";
+    system($cmd) == 0
+      || die "last failed:\n$cmd\n$!";
   }
   my $hits = parseBLASTpHits("$tmpPre.hits");
   unlink("$tmpPre.faa");
