@@ -14,7 +14,7 @@ use List::Util qw{max};
 # from the PaperBLAST code base
 use pbweb qw{GetMotd commify
              VIMSSToFasta RefSeqToFasta UniProtToFasta FBrowseToFasta pdbToFasta
-             runTimerHTML runWhileCommenting};
+             runTimerHTML runWhileCommenting doWhileCommenting};
 use pbutils qw{NewerThan ReadFastaEntry};
 use neighbor;
 use clusterProteins;
@@ -217,14 +217,16 @@ sub computeSubDbHomologs($) {
   my $mult = $nProteins > 2 * $nClusters ? 0.5 : 1;
   my $nMaxHits1 = max(int($mult * $nGenomes + 0.5), 200);
   my $nMaxHits2 = max($nGenomes, 200);
-  return clusteredBLASTp('query' => $seq,
-                         'clusterDb' => $clusterDb,
-                         'maxHits' => [$nMaxHits1,$nMaxHits2],
-                         'dbh' => getSubDbHandle(),
-                         'nCPUs' => 12,
-                         'quiet' => $quietMode,
-                         'dbSize' => $nAA,
-                         'bin' => "../bin");
+  return doWhileCommenting(sub {
+    clusteredBLASTp('query' => $seq,
+                    'clusterDb' => $clusterDb,
+                    'maxHits' => [$nMaxHits1,$nMaxHits2],
+                    'dbh' => getSubDbHandle(),
+                    'nCPUs' => 12,
+                    'quiet' => $quietMode,
+                    'dbSize' => $nAA,
+                    'bin' => "../bin")
+      } );
 }
 
 # The query may be a locus tag in the database,
