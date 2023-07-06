@@ -23,12 +23,13 @@ use MOTree; # from PaperBLAST/lib/
 # Optional arguments:
 # order (which subdb to use)
 # n -- max number of hits to show
-# kb -- how many kilobases to show
+# kb -- how many kilobases to show (default 6 except for long genes)
 # hitType -- top, topCollapse, random, or randomAny;
-#   top means show top hits and is the default;
+#   top means show top hits;
 #   topCollapse means show top hits but collapse cluster x species (subdbs only);
 #   random means select that many random good hits;
 #   randomAny means random N hits
+#   The default is either top or topCollapse
 # compact -- use far less vertical space
 # format -- empty (default -- shows an svg) or fasta (proteins sequences of homologs shown)
 #     or tsv (tab-delimited table of all genes shown)
@@ -41,17 +42,9 @@ my ($gene, $seqDesc, $seq) = getGeneSeqDesc($cgi);
 my $n = $cgi->param('n');
 $n = 50 unless defined $n && $n =~ m/^\d+$/;
 $n = 200 if $n > 200;
-my $kbShown = $cgi->param('kb') || 6;
-die "Invalid kb" unless $kbShown =~ m/^\d+/;
-$kbShown = min(40, max(2, $kbShown));
-my $ntShown = $kbShown * 1000;
-my $kbWidth = int(0.5 + 150 / ($kbShown/6));
 my $compact = defined $cgi->param('compact') && $cgi->param('compact') eq "0" ? 0 : 1;
-$kbWidth *= 0.75 if $compact;
-my $hitType = $cgi->param('hitType') || 'top';
-$hitType = 'top' if $hitType eq 'topCollapse' && getOrder() eq "";
+my $hitType = $cgi->param('hitType') || (getOrder ne "" ? 'topCollapse' : 'top');
 my $showTree = $cgi->param('tree') || 0;
-my $collapseSpecies = getOrder() ne "" && ($cgi->param('collapse') || 0);
 
 if (defined $gene && ! $seq) {
   # should not be reachable, but redirect to gene page just in case
@@ -60,11 +53,31 @@ if (defined $gene && ! $seq) {
 }
 die unless $seq;
 
+my @kbValues = (6, 9, 12, 18, 25, 40);
+my $kbShown = $cgi->param('kb');
+if (!defined $kbShown) {
+  # Default kbShown is 6, unless the gene is long, in
+  # which case it is twice its length
+  $kbShown = max(6, (length($seq)+1) * 3 * 2/1000);
+}
+die "Invalid kb" unless $kbShown =~ m/^\d+/;
+# Set kbShown to the next highest value in @kbValues
+for (my $i = 0; $i < scalar(@kbValues); $i++) {
+  if ($kbShown <= $kbValues[$i]) {
+    $kbShown = $kbValues[$i];
+    last;
+  }
+}
+$kbShown = max(@kbValues) if $kbShown > max(@kbValues);
+my $ntShown = $kbShown * 1000;
+my $kbWidth = int(0.5 + 150 / ($kbShown/6));
+
 my ($locusTag, $genome);
 if (defined $gene) {
   $locusTag = $gene->{locusTag};
   $genome = gidToGenome($gene->{gid}) || die;
 }
+$kbWidth *= 0.75 if $compact;
 
 unless (hasHits($seq)) {
   print redirect(-url => "findHomologs.cgi?" . geneSeqDescSeqOptions($gene, $seqDesc, $seq));
@@ -216,7 +229,7 @@ if ($format eq "") {
                                 'random' => 'random good hits' },
                    -default => $hitType),
         "&nbsp;",
-        'Kilobases:', popup_menu(-name => 'kb', -values => [6, 9, 12, 18, 25, 40], -default => $kbShown),
+        'Kilobases:', popup_menu(-name => 'kb', -values => \@kbValues, -default => $kbShown),
         "&nbsp;",
         qq{<INPUT name='tree' TYPE='checkbox' $treeChecked><label for='tree'>Show tree?</label>},
         "&nbsp;",
