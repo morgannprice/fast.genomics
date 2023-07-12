@@ -28,9 +28,11 @@ use pbweb qw{commify};
 # For taxon mode:
 # taxLevel -- which level to tabulate at
 # taxMode -- either "close" or "both"
-# Good -- 1 if considering good hits to both loci only
+# homologs -- all (default), orthologs, or good
 # all -- set to "all" to show results for all taxa, sorted by taxonomy
 #   defaults to "freq" -- show only taxa with hits, and sort by frequency of the gene being present
+# obsolete CGI arguments:
+#   Good=1 instead of homologs=good
 
 my $closeKb = 5;
 my $closeNt = $closeKb * 1000;
@@ -233,18 +235,31 @@ if ($taxLevel) { # taxon distribution mode
   my @levelsShow = map capitalize($_), @levels;
 
   die "Invalid taxMode" unless $taxMode eq "both" || $taxMode eq "close";
-  my $goodOnly = $cgi->param('Good') || 0;
+  my $homologSpec = $cgi->param('homologs') || "all";
+  $homologSpec = "good" if $cgi->param('Good');
+  $homologSpec = "all" unless $homologSpec eq "orthologs" || $homologSpec eq "good";
   my $all = $cgi->param('all') || "freq";
   die "Invalid all" unless $all eq "all" || $all eq "freq";
 
-  # All hits by genome
+  my $len1 = length($seq);
+  my $len2 = length($seq2);
+
+  # Kept hits by genome
   my %byg1 = ();
   foreach my $hit (@$geneHits1) {
-    push @{ $byg1{ $hit->{gid} } }, $hit if !$goodOnly || $hit->{bits} >= $max1 * 0.3;
+    push @{ $byg1{ $hit->{gid} } }, $hit
+      if $homologSpec eq "all"
+        || ($homologSpec eq "orthologs" && $hit->{identity} >= 0.3
+            && $hit->{qEnd} - $hit->{qBegin} + 1 >= 0.5 * $len1)
+        || ($homologSpec eq "good" && $hit->{bits} >= $max1 * 0.3);
   }
   my %byg2 = ();
   foreach my $hit (@$geneHits2) {
-    push @{ $byg2{ $hit->{gid} } }, $hit if !$goodOnly || $hit->{bits} >= $max2 * 0.3;
+    push @{ $byg2{ $hit->{gid} } }, $hit
+      if $homologSpec eq "all"
+        || ($homologSpec eq "orthologs" && $hit->{identity} >= 0.3
+            && $hit->{qEnd} - $hit->{qBegin} + 1 >= 0.5 * $len2)
+        || ($homologSpec eq "good" && $hit->{bits} >= $max2 * 0.3);
   }
 
   # genome to list of relevant hits
@@ -289,16 +304,26 @@ if ($taxLevel) { # taxon distribution mode
     }
   }
 
-  my $hitsString = "homologs";
-  $hitsString = a({-title => "At least 30% of maximum possible bit score" }, "good homologs")
-    if $goodOnly;
+  my ($homologSpecString, $homologSpecTitle);
+  if ($homologSpec eq "orthologs") {
+    $homologSpecString = "potential orthologs";
+    $homologSpecTitle = "at least 30% identity and 50% coverage";
+  } elsif ($homologSpec eq "good") {
+    $homologSpecString = "good homologs";
+    $homologSpecTitle = "bit score is at least 30% of the self-score";
+  } else {
+    $homologSpecString = "homologs";
+    $homologSpecTitle = "any homologs";
+  }
   my $whatString = "for both genes";
   $whatString = "nearby" if $taxMode eq "close";
   my %taxonPlural = qw{phylum phyla class classes order orders family families genus genera species species};
-  print p("Showing which $taxonPlural{$taxLevel} have", $hitsString, $whatString . ".",
+  print p("Showing which $taxonPlural{$taxLevel} have",
+          a({-title => $homologSpecTitle}, $homologSpecString),
+          $whatString . ".",
           "Genomes with",
-          ($goodOnly ? "good homologs for" : ""),
-          ($taxMode eq "both" ? "both genes" : "the genes within $closeKb kb and on the same strand").":",
+          $homologSpecString,
+          ($taxMode eq "both" ? "for both genes" : "within $closeKb kb and on the same strand").":",
           scalar(keys %gid1)."."), "\n";
   my $hidden2;
   if ($gene2){
@@ -321,9 +346,9 @@ if ($taxLevel) { # taxon distribution mode
       popup_menu(-name => 'taxLevel', -values => \@levelsAllowed,
                  -default => $taxLevel),
       "&nbsp;",
-      a({-title => "a good homolog has at least 30% of the maximum possible bit score"},
-        checkbox(-name => 'Good', -checked => $goodOnly),
-        "homologs only?"),
+      "Homologs:",
+      popup_menu(-name => 'homologs', -values => [qw{all orthologs good}],
+                 -default => $homologSpec),
       "&nbsp;",
       "Show:",
       popup_menu(-name => 'all', -values => [ "all", "freq" ],
@@ -389,17 +414,15 @@ if ($taxLevel) { # taxon distribution mode
     my @header = @levelsShow;
     $header[0] = "&nbsp;" if getOrder() eq "";
     push @header, "#Genomes";
-    $hitsString = $goodOnly ? "good homologs" : "homologs";
     if ($taxMode eq "close") {
-      push @header, a({-title => "#Genomes with $hitsString nearby"}, "#Nearby");
+      push @header, a({-title => "#Genomes with $homologSpecString nearby"}, "#Nearby");
     } else {
-      push @header, a({-title => "#Genomes with $hitsString for both genes"}, "#Both");
+      push @header, a({-title => "#Genomes with $homologSpecString for both genes"}, "#Both");
     }
-    my $homologString = $goodOnly ? "good homologs" : "homologs";
     push @header,
       map(a({-title => "Bit score ratio for the best homolog of protein $_, among "
-             . ($taxMode eq "close" ? "nearby pairs of $homologString"
-                : "genomes with $homologString for both") },
+             . ($taxMode eq "close" ? "nearby pairs of $homologSpecString"
+                : "genomes with $homologSpecString for both") },
          "Max ratio$_"), 1..2);
     print qq[<TABLE cellpadding=1 cellspacing=1>], "\n";
     print Tr(map th($_), @header), "\n";
@@ -445,13 +468,12 @@ if ($taxLevel) { # taxon distribution mode
         my $modeString = $taxMode eq "close" ? "close-by" : "co-occurring";
         $showNHit = a({ -href => $URL,
                         -style => "text-decoration: none;",
-                        -title => "see$truncateString $modeString $hitsString in $row->{nHitGenomes} "
+                        -title => "see$truncateString $modeString $homologSpecString in $row->{nHitGenomes} "
                         . encode_entities($lineage[-1]) },
                       commify($row->{nHitGenomes}));
       } else {
         $showNHit = "&nbsp;";
       }
-      
       my $bgColor = $iRow++ % 2 == 0 ? "lightgrey" : "white";
       print Tr({-style => "background-color: $bgColor;"},
                td(\@out),
