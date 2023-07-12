@@ -18,8 +18,10 @@ use pbweb qw{commify};
 # optional CGI arguments:
 # order (which subdb to use)
 # taxLevel -- defaults to phylum, for top-level db, or family otherwise
-# Good -- set if show results for good hits only
 # all -- set to all if show results for all taxa, sorted by taxonomy, instead of sorting by frequency
+# homologs = all (default), orthologs (30% identity & 50% coverage), or good (30% of self-score)
+# obsolete arguments:
+# Good -- used to set homologs = good
 
 my $cgi = CGI->new;
 setOrder(param('order'));
@@ -43,7 +45,11 @@ if (getOrder eq "") {
 my %levelsAllowed = map { $_ => 1 } @levelsAllowed;
 die "Invalid taxLevel $taxLevel\n" unless exists $levelsAllowed{$taxLevel};
 
-my $showGood = $cgi->param('Good') ? 1 : "";
+my $homologSpec = $cgi->param('homologs') || "all";
+$homologSpec = "good" if $cgi->param('Good');
+$homologSpec = "all"
+  unless $homologSpec eq "good" || $homologSpec eq "orthologs";
+
 my $all = $cgi->param('all') || "freq";
 die "Invalid all" unless $all eq "all" || $all eq "freq";
 
@@ -78,6 +84,8 @@ my $geneHits = hitsToGenes($hits);
 my $maxScore = estimateTopScore($geneHits->[0], $seq);
 my $scoreThreshold = sprintf("%.1f", 0.3 * $maxScore);
 my @goodHits = grep $_->{bits} >= $scoreThreshold, @$geneHits;
+my $seqLen = length($seq);
+my @orthHits = grep $_->{identity} >= 0.3 && $_->{qEnd} - $_->{qBegin} >= 0.5 * $seqLen, @$geneHits;
 my %gidAll = ();
 foreach my $gh (@$geneHits) {
   $gidAll{ $gh->{gid} }++;
@@ -86,17 +94,37 @@ my %gidGood = ();
 foreach my $gh (@goodHits) {
   $gidGood{ $gh->{gid} }++;
 }
+my %gidOrth= ();
+foreach my $gh (@orthHits) {
+  $gidOrth{ $gh->{gid} }++;
+}
 
-my $nGood = scalar(@goodHits);
-print p("Loaded", commify(scalar(@$geneHits)), "hits from", commify(scalar(keys %gidAll)),
+
+print p("Loaded",
+        commify(scalar(@$geneHits)),
+        "hits from",
+        commify(scalar(keys %gidAll)),
         "genomes, including",
-       commify($nGood), "good hits (&ge; $scoreThreshold bits) from",
-       scalar(keys %gidGood), "genomes.");
-$geneHits = \@goodHits if $showGood;
+        a({-title => "at least 30% identity and at least 50% coverage"},
+          commify(scalar(@orthHits)),
+          "potential orthologs",
+          "(".scalar(keys %gidOrth), "genomes)"),
+        "or",
+        a({-title => "at least $scoreThreshold bits (30% of self score)"},
+          commify(scalar(@goodHits)),
+          "good hits",
+          "(".scalar(keys %gidGood), "genomes)."));
+if ($homologSpec eq "good") {
+  $geneHits = \@goodHits;
+} elsif ($homologSpec eq "orthologs") {
+  $geneHits = \@orthHits;
+}
 
-print p("Showing the distribution of",
-        $showGood ? "good" : "all",
-        "hits at the level of", $taxLevel), "\n";
+my $homologSpecString = "all hits";
+$homologSpecString = "good hits" if $homologSpec eq "good";
+$homologSpecString = "potential orthologs" if $homologSpec eq "orthologs";
+print p("Showing the distribution of $homologSpecString at the level of",
+        $taxLevel), "\n";
 
 print
   start_form( -name => 'input', -method => 'GET', -action => 'hitTaxa.cgi' ),
@@ -104,8 +132,9 @@ print
   p("Level:",
     popup_menu(-name => 'taxLevel', -values => \@levelsAllowed, -default => $taxLevel),
     "&nbsp;",
-    checkbox(-name => 'Good', -checked => $showGood),
-    "homologs only?",
+    "Homologs:",
+    popup_menu(-name => 'homologs', -values => [qw{all orthologs good}],
+               -default => $homologSpec),
     "&nbsp;",
     "Show:",
     popup_menu(-name => 'all', -values => [ "all", "freq" ],
@@ -232,11 +261,10 @@ foreach my $row (@rows) {
       splice @tHits, $maxShow;
     }
     my $URL = addOrderToURL("genes.cgi?" . join("&", map "g=" . $_->{locusTag}, @tHits));
-    my $goodString = $showGood ? "good" : "all";
     my $truncateString = $truncate ? " top $maxShow of" : "";
     $showNHits = a({ -href => $URL,
                    -style => "text-decoration: none;",
-                   -title => "see$truncateString $goodString hits in " . encode_entities($taxPieces[-1]) },
+                   -title => "see$truncateString $homologSpecString in " . encode_entities($taxPieces[-1]) },
                    $showNHits);
   } else {
     $showNHits = "&nbsp;";
