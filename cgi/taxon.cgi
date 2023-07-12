@@ -124,7 +124,9 @@ if (getOrder() eq "") {
             "Or see",
             a({-href => "taxon.cgi?level=$level&taxon=$taxon&order=$order"},
               $nSubGenomes, "genomes"),
-            "in the database for", $order, "only")
+            "in the database for", $order, "only,",
+            "or",
+            a({-href => "search.cgi?order=$order"}, "search $order"))
       if $nSubGenomes > 0;
   }
 } else {
