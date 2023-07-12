@@ -489,18 +489,20 @@ foreach my $hit (@$geneHits) {
     push @svgLines,
       qq[<text x="$xLabel" y="$yCenter" font-size="70%" dominant-baseline="middle">],
       qq[<a xlink:href="$genomeURL"><title>$lineage</title><tspan font-style="italic">$showTax</tspan></a>];
-    if (exists $hit->{genes} && exists $hit->{nGenomes}
-        && scalar(@{ $hit->{genes} }) > 1) {
+    if (exists $hit->{genes} && exists $hit->{nGenomes}) {
       # information about the collapsed group of genes
+      # (show even if there is just one hit, so that it is apparent if it is not
+      # conserved within a species)
       my $nGenes = scalar(@{ $hit->{genes} });
       my $genesURL = encode_entities(addOrderToURL("genes.cgi?" . join("&", map "g=$_", @{ $hit->{genes} })));
       my ($nSpeciesGenomes) = getDbHandle()->selectrow_array(
           qq{SELECT nGenomes FROM Taxon WHERE taxon = ? AND level = "species"}, {}, $hitGenome->{gtdbSpecies});
-      my $strainsString = $hit->{nGenomes} > 1 ? "$hit->{nGenomes}/$nSpeciesGenomes strains" : "1/$nSpeciesGenomes strain";
-      my $nGenesLabel = "$hit->{nGenomes}/$nSpeciesGenomes "
-        . ($nSpeciesGenomes == 1 ? "strain" : "strains");
-      $nGenesLabel = "$nGenes in $nGenesLabel" if $nGenes != $hit->{nGenomes};
-      push @svgLines, qq[<a xlink:href="$genesURL"><title>$nGenes similar genes (over 70% identity and 90% overlap) in $strainsString of $hitGenome->{gtdbSpecies}</title>($nGenesLabel)</a>];
+      if ($nSpeciesGenomes > 1 || scalar(@{ $hit->{genes} }) > 1) {
+        my $strainsString = "$hit->{nGenomes}/$nSpeciesGenomes strains";
+        my $nGenesLabel = "$hit->{nGenomes}/$nSpeciesGenomes strains";
+        $nGenesLabel = "$nGenes in $nGenesLabel" if $nGenes != $hit->{nGenomes};
+        push @svgLines, qq[<a xlink:href="$genesURL"><title>$nGenes similar genes (over 70% identity and 90% overlap) in $strainsString of $hitGenome->{gtdbSpecies}</title>($nGenesLabel)</a>];
+      }
     }
     push @svgLines, "</text>";
   } else {
