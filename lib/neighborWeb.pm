@@ -602,7 +602,7 @@ sub geneSeqDescSeqOptions($$$) {
   if (defined $gene) {
     $options = "locus=$gene->{locusTag}";
   } else {
-    my $seqDescE = encode_entities($seqDesc);
+    my $seqDescE = uri_escape($seqDesc);
     $options = "seqDesc=$seqDescE&seq=$seq";
   }
   $options .= "&order=$memOrder" if $memOrder ne "";

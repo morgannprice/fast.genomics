@@ -57,8 +57,7 @@ print p("Found at least",
         commify(scalar(grep $_->{bits} >= $maxScore*0.3, @$hits)),
         "hits with &ge;30% of max score (at least " . sprintf("%.1f",0.3 * $maxScore) . " bits)");
 
-my $options = defined $gene ? "locus=".$gene->{locusTag}
-  : "seqDesc=" . encode_entities($seqDesc) . "&" . "seq=$seq";
+my $options = geneSeqDescSeqOptions($gene,$seqDesc,$seq);
 print p("See",
         join(", or ",
              a({-href => addOrderToURL("neighbors.cgi?${options}")}, "gene neighborhoods"),
