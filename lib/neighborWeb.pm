@@ -29,7 +29,7 @@ our (@ISA,@EXPORT);
              moreGenomesInSubDb
              hitsToGenes hitsToTopGenes hitsToTopGenesClustered hitsToRandomGenes
              parseGeneQuery
-             getGeneSeqDesc geneSeqDescSeqOptions geneSeqDescSeqHidden
+             getGeneSeqDesc geneSeqDescSeqOptions geneSeqDescSeqOptionsNoOrder geneSeqDescSeqHidden
              start_page finish_page
              locusTagToGene getNearbyGenes gidToGenome
              showSequence formatFastaHtml proteinAnalysisLinks
@@ -596,7 +596,7 @@ sub getGeneSeqDesc($) {
   return (undef, $seqDesc, $seq);
 }
 
-sub geneSeqDescSeqOptions($$$) {
+sub geneSeqDescSeqOptionsNoOrder($$$) {
   my ($gene, $seqDesc, $seq) = @_;
   my $options;
   if (defined $gene) {
@@ -605,6 +605,12 @@ sub geneSeqDescSeqOptions($$$) {
     my $seqDescE = uri_escape($seqDesc);
     $options = "seqDesc=$seqDescE&seq=$seq";
   }
+  return $options;
+}
+
+sub geneSeqDescSeqOptions($$$) {
+  my ($gene, $seqDesc, $seq) = @_;
+  my $options = geneSeqDescSeqOptionsNoOrder($gene, $seqDesc, $seq);
   $options .= "&order=$memOrder" if $memOrder ne "";
   return $options;
 }
