@@ -35,6 +35,8 @@ use MOTree; # from PaperBLAST/lib/
 #     or tsv (tab-delimited table of all genes shown)
 #     or newick (the tree) or svg
 # tree -- set to build a tree (if needed) and render it
+# minCluster -- minimum number or % of cluster representatives
+#   for it to be highlighted/colored
 
 my $cgi = CGI->new;
 setOrder(param('order'));
@@ -45,6 +47,7 @@ $n = 200 if $n > 200;
 my $compact = defined $cgi->param('compact') && $cgi->param('compact') eq "0" ? 0 : 1;
 my $hitType = $cgi->param('hitType') || (getOrder ne "" ? 'topCollapse' : 'top');
 my $showTree = $cgi->param('tree') || 0;
+my $minClusterSpec = $cgi->param('minClusterSpec') || 2;
 
 if (defined $gene && ! $seq) {
   # should not be reachable, but redirect to gene page just in case
@@ -190,7 +193,7 @@ if (defined $gene && $geneHits->[0]{locusTag} ne $gene->{locusTag}) {
 my $options = geneSeqDescSeqOptions($gene,$seqDesc,$seq);
 if ($format eq "") {
   if ($hitType eq "topCollapse") {
-    print p(a({-title => "Within each species, proteins are clustered at 70% identity and 90% overlap, and only one representative is shown from each cluster"},
+    print p(a({-title => "Within each species, proteins are clustered at 70% identity and 90% overlap, and only one homolog of the query is shown from each cluster"},
               "Showing $kbShown kb around",
               @$geneHits < $n ? "all" : "the top",
               commify(scalar(@$geneHits)),
@@ -217,19 +220,22 @@ if ($format eq "") {
   my $treeChecked = $showTree ? "CHECKED" : "";
   my $topValues = getOrder() eq "" ? [qw{top randomAny random}]
     : [qw{top topCollapse randomAny random}];
+  my @minClusterSpecs = (2, 3, '10%', '20%', '30%', '40%', '50%');
+  my %minClusterLabels = map { $_=> ">=".$_ } @minClusterSpecs;
   print
     start_form( -name => 'input', -method => 'GET', -action => 'neighbors.cgi' ),
       geneSeqDescSeqHidden($gene, $seqDesc, $seq),
       p('Hits to show:',
-        popup_menu(-name => 'n', -values => [25, 50, 100, 150, 200], -default => $n),
-        popup_menu(-name => 'hitType', -values => $topValues,
+        popup_menu(-style => 'width: 4em;', -name => 'n', -values => [25, 50, 100, 150, 200], -default => $n),
+        popup_menu(-style => 'width: 10em;', -name => 'hitType', -values => $topValues,
                    -labels => { 'top' => 'top hits',
-                                'topCollapse' => 'top clusters x species',
+                                'topCollapse' => 'species clusters',
                                 'randomAny' => 'random hits',
                                 'random' => 'random good hits' },
                    -default => $hitType),
         "&nbsp;",
-        'Kilobases:', popup_menu(-name => 'kb', -values => \@kbValues, -default => $kbShown),
+        a({-title => "How many kilobases to show around each gene"},  'Kb:'),
+        popup_menu(-style => "width: 4em;", -name => 'kb', -values => \@kbValues, -default => $kbShown),
         "&nbsp;",
         qq{<INPUT name='tree' TYPE='checkbox' $treeChecked><label for='tree'>Show tree?</label>},
         "&nbsp;",
@@ -237,6 +243,10 @@ if ($format eq "") {
         popup_menu(-name => 'compact', -values => [1,0], -default => ! $compact,
                    -labels => {'0' => 'detailed', '1' => 'compact'}),
         "&nbsp;",
+        a({-title => "Color a cluster of similar proteins only if it has at least this many members"}, 'Color:'),
+        popup_menu(-name => 'minClusterSpec', -values=> \@minClusterSpecs,
+                   -labels => \%minClusterLabels,
+                   -default => $minClusterSpec),
         submit('Change')),
     end_form;
 
@@ -289,6 +299,14 @@ my $yAt = $compact && $showTree ? 25 : 1;
 my @svgLines = ();
 my $xMax = 500; # it will actually be much higher for the gene track
 
+my $minClusterSize = $minClusterSpec;
+if ($minClusterSpec =~ m/^(\d+)%$/) {
+  my $percent = $1;
+  $minClusterSize = int(0.5 + $percent * $nHits/100.0);
+}
+$minClusterSize = 2 unless $minClusterSize >= 2;
+$minClusterSize = $nHits if $minClusterSize > $nHits;
+
 my %genes = (); # locusTag => gene to show
 foreach my $hit (@$geneHits) {
   my $nearbyGenes = getNearbyGenes($hit);
@@ -311,6 +329,13 @@ foreach my $iCluster (0..(scalar(@$clusters)-1)) {
     $locusTagToICluster{ $gene->{locusTag} } = $iCluster;
   }
 }
+
+# If a non-focal gene is in the top hit's cluster, then add a comment to the description
+my $topHitICluster;
+if (exists $locusTagToICluster{ $geneHits->[0]{locusTag} }) {
+  $topHitICluster = $locusTagToICluster{ $geneHits->[0]{locusTag} };
+}
+
 # From colorbrewer2.org -- qualitative palette, n=12 (the maximum), and save the 1st color
 # for the alignment bar
 my $focalColor = "white";
@@ -348,7 +373,10 @@ foreach my $hit (@$geneHits) {
         $iClusterColors[$iCluster] = $clusterColorSet[ $iColor++ ];
         $iColor = 0 if $iColor >= scalar(@clusterColorSet);
       }
-      $locusTagToColor{ $s->{locusTag} } = $iClusterColors[$iCluster];
+      my $cluster = $clusters->[$iCluster];
+      if (scalar(@$cluster) >= $minClusterSize) {
+        $locusTagToColor{ $s->{locusTag} } = $iClusterColors[$iCluster];
+      }
     }
   }
 }
@@ -599,11 +627,16 @@ foreach my $hit (@$geneHits) {
                       URL => "alignPair.cgi?${options}&locus2=" . $s->{locusTag},
                       # in compact mode, difficult to click on one vs. other so have the same
                       # information in the hover text for the bar as for the ORF
-                      title => $compact ? $s->{desc}. " ($hitDetailsShort, see alignment)": $hitDetails,
+                      title => $compact ? $s->{locusTag} . ": " . $s->{desc}. " ($hitDetailsShort, see alignment)"
+                                        : $hitDetails,
                       # The original color '#a6cee3' was too close to white, use a cyan instead
                       color => '#44DDDD'  };
         $s->{desc} .= " ($hitDetailsShort)";
       }
+    } elsif (defined $topHitICluster
+             && exists $locusTagToICluster{$s->{locusTag}}
+             && $locusTagToICluster{$s->{locusTag}} == $topHitICluster) {
+      $s->{desc} .= " (similar to the query?)";
     }
   }
   my ($scaffoldLen) = getDbHandle->selectrow_array(
