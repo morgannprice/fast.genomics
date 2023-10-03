@@ -81,7 +81,7 @@ if (getOrder() eq "") {
   }
 } else {
   print p("Or find",
-          a({-href => "findHomologs.cgi?${options}" },
+          a({-href => "findHomologs.cgi?" . geneSeqDescSeqOptionsNoOrder($gene,$seqDesc,$seq) },
             "homologs in diverse bacteria and archaea"));
 }
 
