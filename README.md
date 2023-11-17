@@ -7,6 +7,7 @@ supports fast browsing for every group of prokaryotes.
 
 See
 http://fast.genomics.lbl.gov/
+or the [preprint](https://doi.org/10.1101/2023.08.23.554478)
 
 # System Requirements
 
