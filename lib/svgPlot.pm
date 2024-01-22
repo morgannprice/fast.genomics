@@ -99,7 +99,7 @@ sub marginText {
   }
 
 
-  my $out = qq{<TEXT text-anchor="middle" dominant-baseline="bottom" x="0" y="0"};
+  my $out = qq{<text text-anchor="middle" dominant-baseline="bottom" x="0" y="0"};
   my $transform;
   if ($side eq "left" || $side eq "right") {
     $transform = "translate($x,$y) rotate(-90)";
@@ -116,7 +116,7 @@ sub marginText {
     $title = encode_entities($title);
     $out .= qq{<TITLE>$title</TITLE>};
   }
-  $out .= encode_entities("$text") . "</TEXT>";
+  $out .= encode_entities("$text") . "</text>";
 
   my $URL = $options{URL};
   if (defined $URL && $URL ne "") {
