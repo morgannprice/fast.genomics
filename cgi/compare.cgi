@@ -555,6 +555,7 @@ if ($tsv) {
              "ratio1", "ratio2",
              "identity1", "identity2",
              "alnLength1", "alnLength2",
+             "eValue1", "eValue2",
              "close")."\n";
   foreach my $row (@gidValues) {
     my $gid = $row->{gid};
@@ -568,6 +569,7 @@ if ($tsv) {
                $row->{ratio1}, $row->{ratio2},
                $byg1{$gid}{identity} || "", $byg2{$gid}{identity} || "",
                $byg1{$gid}{alnLength} || "", $byg2{$gid}{alnLength} || "",
+               $byg1{$gid}{eValue} || "", $byg2{$gid}{eValue} || "",
                $row->{close} ? 1 : 0)."\n";
   }
   exit(0);
