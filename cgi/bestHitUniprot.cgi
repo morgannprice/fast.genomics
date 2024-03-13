@@ -4,12 +4,13 @@ use CGI qw(:standard Vars start_ul);
 use CGI::Carp qw(warningsToBrowser fatalsToBrowser);
 use IO::Handle; # for autoflush
 use HTML::Entities;
+use URI::Escape;
 use lib "../lib";
 use bestHitUniprot;
 # neighborWeb.pm relies on various PaperBLAST libraries
 use lib "../../PaperBLAST/lib";
 use neighborWeb;
-use pbweb qw{analysisLinks};
+use pbweb qw{analysisLinks UniProtToFasta};
 
 # CGI arguments:
 # query (optional) -- an identifier or locus tag, or a sequence in fasta format
@@ -54,12 +55,28 @@ if (exists $hit->{error}) {
       $hit->{prefix} eq "sp" ? "Swiss-Prot" : "UniProt",
       a({-href => $uniprotURL}, $uniprotId),
       $hit->{geneName},
-      "(".a({-href => $interproURL}, "InterPro").")",
-      "over",
-      $hit->{qBegin}.":".$hit->{qEnd}."/".length($query{seq}),
-      "of query"),
+      "(".a({-href => $interproURL}, "InterPro").")"),
+   "\n",
    p("Description:",
-     encode_entities($hit->{desc}), "(" . i(encode_entities($hit->{species})) . ")");
+     encode_entities($hit->{desc}), "(" . i(encode_entities($hit->{species})) . ")"),
+   "\n";
+  # Fetch the target's sequence and build link to alignment
+  my $fasta = UniProtToFasta($uniprotId);
+  my @lines = split /\n/, $fasta;
+  my $header = shift @lines; $header =~ s/^>//;
+  my $hitSeq = join("", @lines);
+  my $genes = $query{genes};
+  my $gene;
+  $gene = $genes->[0] if defined $genes && scalar(@$genes) == 1;
+  my $alnURL = "alignPair.cgi?" . geneSeqDescSeqOptions($gene, $query{seqDesc}, $query{seq})
+    . "&seq2=$hitSeq&seqDesc2=" . uri_escape($header);
+  print
+    p($hit->{qBegin}.":".$hit->{qEnd}."/".length($query{seq}),
+      "of query aligns to",
+      $hit->{sBegin}.":".$hit->{sEnd}."/".length($hitSeq),
+      "of",  encode_entities($uniprotId).",",
+      "see",
+      a({-href => $alnURL }, "alignment"));
 } else {
   # no hits
   print p("Sorry, no close match to this sequence was found in UniProt");
