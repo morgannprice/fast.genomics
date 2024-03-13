@@ -24,7 +24,7 @@ my $options = geneSeqDescSeqOptions($gene,$seqDesc,$seq); # for 1st gene
 
 my $locus2 = $cgi->param('locus2');
 my $seq2 = $cgi->param('seq2');
-my $seqDesc2 = $cgi->param('desc2');
+my $seqDesc2 = $cgi->param('seqDesc2');
 my $query2 = $cgi->param('query2') || "";
 my $gene2;
 
