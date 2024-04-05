@@ -295,7 +295,7 @@ if ($format eq "fasta") {
 
 my $nHits = scalar(@$geneHits);
 # In compact show-tree mode, need extra space at top for the tree's scale bar
-my $yAt = $compact && $showTree ? 25 : 1;
+my $yAt = $compact && $showTree ? 25 : 2;
 my @svgLines = ();
 my $xMax = 500; # it will actually be much higher for the gene track
 
