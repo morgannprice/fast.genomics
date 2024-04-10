@@ -118,7 +118,7 @@ interest need not be in the <i>fast.genomics</i> database.
 
 <P style="font-size:90%;">(These examples are for a putative 3-ketoglycoside hydrolase, ING2E5A_RS06865. This family of proteins was formerly known as DUF1080.)</P>
 
-<P>Also see the <A HREF="https://doi.org/10.1101/2023.08.23.554478">preprint</A>.
+<P>Also see the <A HREF="https://doi.org/10.1371/journal.pone.0301871">paper</A> from 2024.
 END
     ;
 
