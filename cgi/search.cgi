@@ -91,9 +91,9 @@ if (!defined $query{genes} && !defined $query{seq}) {
 
 <P><i>Fast.genomics</i> includes representative genomes for $nGenomes genera of $domainsString.
 These were classified by using
-the <A HREF="https://gtdb.ecogenomic.org/">Genome Tree Database</A>.
+the <A HREF="https://gtdb.ecogenomic.org/">Genome Tree Database</A> (GTDB)).
 Only high-quality genomes are included. Potential chimeras were excluded using
-<A HREF="https://genomebiology.biomedcentral.com/articles/10.1186/s13059-021-02393-0">GUNC</A>.
+<A HREF="https://www.nature.com/articles/s41592-023-01940-w">CheckM2</A>.
 Where possible, genomes were
 taken from NCBI's <A
 HREF="https://www.ncbi.nlm.nih.gov/refseq/">RefSeq</A>.
@@ -118,7 +118,6 @@ interest need not be in the <i>fast.genomics</i> database.
 
 <P style="font-size:90%;">(These examples are for a putative 3-ketoglycoside hydrolase, ING2E5A_RS06865. This family of proteins was formerly known as DUF1080.)</P>
 
-<P>Also see the <A HREF="https://doi.org/10.1371/journal.pone.0301871">paper</A> from 2024.
 END
     ;
 
@@ -206,6 +205,21 @@ END
   }
 print <<END
 </TABLE>
+
+<H3>Further information</H3>
+
+<UL>
+<LI><I>Fast.genomics</i> was described in detail in
+<A HREF="https://doi.org/10.1371/journal.pone.0301871">"A fast comparative genome browser for diverse bacteria and archaea"</A>.
+<UL><LI>Changes since the original publication:
+    <LI>We now use <A HREF="https://www.nature.com/articles/s41592-023-01940-w">CheckM2</A>
+        (instead of GUNC and CheckM) to identify low-quality genomes.
+    <LI>We now require a coding density of at least 60%.
+</LI></UL>
+<LI>For advice on using <i>fast.genomics</i> and related tools, see
+<A HREF="https://www.biorxiv.org/content/10.1101/2024.04.15.589591v1">
+"Interactive tools for functional annotation of bacterial genomes"</A>.
+</UL>
 
 <H3>Downloads for the main database</H3>
 
