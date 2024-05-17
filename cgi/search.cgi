@@ -91,7 +91,7 @@ if (!defined $query{genes} && !defined $query{seq}) {
 
 <P><i>Fast.genomics</i> includes representative genomes for $nGenomes genera of $domainsString.
 These were classified by using
-the <A HREF="https://gtdb.ecogenomic.org/">Genome Tree Database</A> (GTDB)).
+the <A HREF="https://gtdb.ecogenomic.org/">Genome Tree Database</A> (GTDB).
 Only high-quality genomes are included. Potential chimeras were excluded using
 <A HREF="https://www.nature.com/articles/s41592-023-01940-w">CheckM2</A>.
 Where possible, genomes were
@@ -116,7 +116,7 @@ interest need not be in the <i>fast.genomics</i> database.
 </UL>
 </UL>
 
-<P style="font-size:90%;">(These examples are for a putative 3-ketoglycoside hydrolase, ING2E5A_RS06865. This family of proteins was formerly known as DUF1080.)</P>
+<P style="font-size:90%;">(These examples are for a putative 3-ketoglycoside lyase, ING2E5A_RS06865. This family of proteins was formerly known as DUF1080.)</P>
 
 END
     ;
