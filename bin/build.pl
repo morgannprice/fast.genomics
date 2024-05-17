@@ -116,6 +116,18 @@ foreach my $row (@genomes) {
     print STDERR join("\t", "Warning", $gid, $warning)."\n";
   }
 
+  # Verify that all locus tags are unique, or else skip this genome
+  my $keepGenome = 1;
+  foreach my $gene (@$genes) {
+    my $locusTag = $gene->{locusTag};
+    if (exists $locusSeen{$locusTag}) {
+      print STDERR "Skipping genome $gid ($fetch) with locus $locusTag also seen in $locusSeen{$locusTag}\n";
+      $keepGenome = 0;
+      last;
+    }
+  }
+  next unless $keepGenome;
+
   open(my $fhIn, "<", $faaIn) || die "Cannot read $faaIn";
   my $state = {};
   while (my ($header,$seq) = ReadFastaEntry($fhIn, $state)) {
@@ -146,8 +158,6 @@ foreach my $row (@genomes) {
   my $nGenesWithProteins = 0;
   foreach my $gene (@$genes) {
     my $locusTag = $gene->{locusTag};
-    die "locus tag $locusTag is in $gid and in $locusSeen{$locusTag}\n"
-      if exists $locusSeen{$locusTag};
     $locusSeen{$locusTag} = $gid;
     my $proteinId = $gene->{proteinId};
     if ($proteinId ne "" & !exists $protSeen{$proteinId}) {
