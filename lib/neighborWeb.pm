@@ -381,9 +381,9 @@ sub hitsToTopGenes($$) {
   my ($hits, $n) = @_;
   return [] unless $n >= 1;
   my @top = @$hits;
-  $#top = $n-1 if scalar(@top) > $n;
+  splice @top, $n if scalar(@top) > $n;
   my $hitGenes = hitsToGenes(\@top);
-  splice $hitGenes, $n if scalar(@$hitGenes) > $n;
+  splice @$hitGenes, $n if scalar(@$hitGenes) > $n;
   return $hitGenes;
 }
 
