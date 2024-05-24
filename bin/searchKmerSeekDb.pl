@@ -45,12 +45,16 @@ die "No input sequence\n" unless $seq;
 my ($kmerLen) = $dbh->selectrow_array("SELECT LENGTH(kmer) FROM KmerLast limit 1;");
 die "No kmer length\n" unless $kmerLen > 0;
 
-my $kmer1 = substr($seq, 0, $kmerLen);
+# Strip leading methionines, since that is how the index works. Also strip any *
+my $seqM = $seq;
+$seqM =~ s/^[Mm]+//;
+$seqM =~ s/[*]//g;
+my $kmer1 = substr($seqM, 0, $kmerLen);
 my $hits1 = $dbh->selectcol_arrayref("SELECT seek FROM KmerFirst WHERE kmer = ? ORDER BY seek", {}, $kmer1);
 
 my $hits2 = [];
-if (length($seq) > $kmerLen) {
-  my $kmer2 = substr($seq, length($seq) - $kmerLen);
+if (length($seqM) > $kmerLen) {
+  my $kmer2 = substr($seqM, length($seqM) - $kmerLen);
   $hits2 = $dbh->selectcol_arrayref("SELECT seek FROM KmerLast WHERE kmer = ? ORDER BY seek", {}, $kmer2);
 }
 
@@ -111,7 +115,7 @@ foreach my $i (0..(scalar(@fetch)-1)) {
   print $fhHitFaa $hitSeqs[$i] . "\n";
 }
 close($fhHitFaa) || die "Error writing to $tmpPre.hits\n";
-my $cmd = "$usearch -search_global $queryFile -db $tmpPre.faa -id 0.8 -blast6out $tmpPre.hits -quiet";
+my $cmd = "$usearch -search_local $queryFile -db $tmpPre.faa -id 0.8 -blast6out $tmpPre.hits -quiet";
 print STDERR "Wrote tmpPre.faa\nRunning $cmd\n" if defined $debug;
 system($cmd) == 0 || die "usearch failed:\n$cmd\n$!";
 

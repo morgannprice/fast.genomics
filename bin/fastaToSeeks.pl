@@ -9,7 +9,8 @@ Usage: fastaToSeeks.pl -in in.fasta -out prefix [ -k $kmerLen ]
 Writes tab-delimited tables prefix_firstk.tsv and prefix_lastk.tsv
 which indexes the 1st or last kmer of each sequence to its seek
 position in the input fasta file. Sequences of kmer length or shorter
-are included as a single kmer in the first file.
+are included as a single kmer in the first file. Leading Ms are ignored
+in the input sequences.
 END
 ;
 
@@ -38,11 +39,12 @@ for(;;) {
   if (!defined $line || $line =~ m/^>/) {
     if (defined $header) {
       die "No sequence for $header\n" if $seq eq "";
-      my $seq1 = substr($seq, 0, $kmerLen);
-      print $fhOut1 join("\t", $seq1, $at)."\n";
+      $seq =~ s/^[mM]+//; # ignore leading methionines
+      my $kmer1 = substr($seq, 0, $kmerLen);
+      print $fhOut1 join("\t", $kmer1, $at)."\n";
       if (length($seq) > $kmerLen) {
-        my $seq2 = substr($seq, length($seq) - $kmerLen);
-        print $fhOut2 join("\t", $seq2, $at)."\n";
+        my $kmer2 = substr($seq, length($seq) - $kmerLen);
+        print $fhOut2 join("\t", $kmer2, $at)."\n";
       }
     }
   }
@@ -59,7 +61,7 @@ for(;;) {
     } else {
       die "No header yet\n" unless defined $header;
       die "Invalid sequence line $line\n" unless $line =~ m/^[a-zA-Z*]*$/;
-      $line =~ s/[*]//;
+      $line =~ s/[*]//g; # ignore * characters (usually from translation problems)
       $line = uc($line);
       $seq .= $line;
     }
