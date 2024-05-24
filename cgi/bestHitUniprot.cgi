@@ -20,6 +20,8 @@ my $query = $cgi->param('query') || "";
 
 start_page('title' => "Find the best match in UniProt",
            'banner' => i("fast.genomics"));
+print p({-style => "font-size: smaller;"}, "Due to technical problems with the SANSparallel server, the best match is currently computed using smaller databases (SwissProt and AlphaFoldDB v2) instead of against all of UniProt. Many proteins may lack close hits.")."\n";
+
 autoflush STDOUT 1; # show preliminary results
 
 my %query = parseGeneQuery($query);
@@ -50,6 +52,8 @@ if (exists $hit->{error}) {
   my $uniprotURL = "https://www.uniprot.org/uniprot/" . $uniprotId;
   my $interproURL = "https://www.ebi.ac.uk/interpro/protein/UniProt/" . $uniprotId;
   my $identityShow = int($hit->{identity} * 100 + 0.5);
+  my $descShow = encode_entities($hit->{desc});
+  $descShow .= " (" . i(encode_entities($hit->{species})) . ")" if $hit->{species};
   print
     p("${identityShow}% identical to",
       $hit->{prefix} eq "sp" ? "Swiss-Prot" : "UniProt",
@@ -57,8 +61,7 @@ if (exists $hit->{error}) {
       $hit->{geneName},
       "(".a({-href => $interproURL}, "InterPro").")"),
    "\n",
-   p("Description:",
-     encode_entities($hit->{desc}), "(" . i(encode_entities($hit->{species})) . ")"),
+   p("Description:", $descShow),
    "\n";
   # Fetch the target's sequence and build link to alignment
   my $fasta = UniProtToFasta($uniprotId);
