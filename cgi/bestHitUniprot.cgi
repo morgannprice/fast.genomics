@@ -119,7 +119,12 @@ if (exists $hit->{uniprotId}) {
    p("Description:", $descShow),
    "\n";
   # Fetch the target's sequence and build link to alignment
-  my $fasta = UniProtToFasta($uniprotId);
+  my $fasta;
+  if (exists $hit->{sSequence}) {
+    $fasta = ">" . $hit->{subject}. "\n" . $hit->{sSequence};
+  } else {
+    $fasta = UniProtToFasta($uniprotId);
+  }
   my @lines = split /\n/, $fasta;
   my $header = shift @lines; $header =~ s/^>//;
   my $hitSeq = join("", @lines);
