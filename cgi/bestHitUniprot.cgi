@@ -11,6 +11,7 @@ use bestHitUniprot;
 use lib "../../PaperBLAST/lib";
 use neighborWeb;
 use pbweb qw{analysisLinks UniProtToFasta};
+use pbutils qw{ReadTable};
 
 # CGI arguments:
 # query (optional) -- an identifier or locus tag, or a sequence in fasta format
@@ -20,7 +21,6 @@ my $query = $cgi->param('query') || "";
 
 start_page('title' => "Find the best match in UniProt",
            'banner' => i("fast.genomics"));
-print p({-style => "font-size: smaller;"}, "Due to technical problems with the SANSparallel server, the best match is currently computed using smaller databases (SwissProt and AlphaFoldDB v2) instead of against all of UniProt. Many proteins may lack close hits.")."\n";
 
 autoflush STDOUT 1; # show preliminary results
 
@@ -44,10 +44,65 @@ if (!defined $query{seq}) {
 print p("Searching for", encode_entities($query{seqDesc}), "(" . length($query{seq}) . " amino acids)")
   if ($query{seqDesc});
 print showSequence($query{seqDesc}, $query{seq}), "\n";
-my $hit = bestHitUniprot($query{seq});
-if (exists $hit->{error}) {
-  print p("Error:", encode_entities($hit->{error}));
-} elsif (exists $hit->{uniprotId}) {
+
+my $hit; # either from kmers or from bestHitUniProt (SANSparallel)
+my $uniDir = "../uni";
+my $uniDb = "$uniDir/sorted.faa";
+my $uniKmerDb = "$uniDir/sorted_kmer.db";
+unless (-e $uniDb && -e $uniKmerDb) {
+  print p({-style => "font-size: smaller;"}, "Skipping kmer-based search (not currently configured)"),
+    "\n";
+} else {
+  my $tmpDir = $ENV{TMPDIR} || "/tmp";
+  my $tmpPre = "$tmpDir/bestHitUniprot.$$";
+  open(my $fh, ">", "$tmpPre.query") || die "Cannot write to $tmpPre.query";
+  print $fh ">query\n" . $query{seq} . "\n";
+  close($fh) || die "Error writing to $tmpPre.faa";
+  my $cmd = "../bin/searchKmerSeekDb.pl -query $tmpPre.query -db $uniDb -kmerdb $uniKmerDb -out $tmpPre.hits";
+  system($cmd) == 0 || die "Kmer search failed\n$cmd\n$!";
+  my @hits = ReadTable("$tmpPre.hits", [qw{subject identity qBegin qEnd sBegin sEnd sSequence}]);
+  unlink("$tmpPre.query");
+  unlink("$tmpPre.hits");
+  if (@hits > 0) {
+    $hit = $hits[0];
+    my $uniprotId = $hit->{subject};
+    $uniprotId =~ s/ .*//;
+    die "Cannot parse $uniprotId from uniprot kmer db: $uniprotId"
+      unless $uniprotId =~ m/^([a-zA-Z]+)[|]([A-Z0-9]+)[|]/;
+    $hit->{prefix} = $1;
+    $uniprotId = $2;
+    my $desc = $hit->{subject};
+    $desc =~ s/^[^ ]+ +//;
+    $desc =~ s/ [A-Z]+=.*//; #i.e. OS=
+    my $species = $1 if $hit->{subject} =~ m/ OS=([^=]+) [A-Z]+=/;
+    my $geneName = $1 if $hit->{subject} =~ m/ GN=([^= ]+) /;
+    $hit->{uniprotId} = $uniprotId;
+    $hit->{desc} = $desc;
+    $hit->{species} = $species;
+    $hit->{geneName} = $geneName || "";
+    $hit->{identity} /= 100; # fraction not percent
+  }
+}
+
+if (!defined $hit) {
+  print p("No nearly-exact matches in UniProt or SwissProt. Searching SwissProt with",
+          a({ -href => "http://ekhidna2.biocenter.helsinki.fi/cgi-bin/sans/sans.cgi"},
+            "SANSparallel") 
+          . "."),
+        "\n";
+  $hit = bestHitUniprot($query{seq});
+  if (exists $hit->{error}) {
+    print p("Error:", encode_entities($hit->{error}));
+    $hit = undef;
+  } elsif (!exists $hit->{uniprotId}) {
+    # no hits
+    print p("Sorry, no close homologs found in SwissProt (roughly, above 50% identity)."),
+      "\n";
+    $hit = undef;
+  }
+}
+
+if (exists $hit->{uniprotId}) {
   my $uniprotId = $hit->{uniprotId};
   my $uniprotURL = "https://www.uniprot.org/uniprot/" . $uniprotId;
   my $interproURL = "https://www.ebi.ac.uk/interpro/protein/UniProt/" . $uniprotId;
@@ -82,7 +137,6 @@ if (exists $hit->{error}) {
       a({-href => $alnURL }, "alignment"));
 } else {
   # no hits
-  print p("Sorry, no close match to this sequence was found in UniProt");
 }
 
 print p(a({-href => "bestHitUniprot.cgi"}, "Try another query"));
