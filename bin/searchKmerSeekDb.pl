@@ -6,11 +6,16 @@ use FindBin qw{$RealBin};
 use lib "$RealBin/../../PaperBLAST/lib";
 use pbutils qw{ReadFastaEntry};
 
+my @outFields = qw{query subject identity alnLength mismatch nGaps qBegin qEnd sBegin sEnd
+                   sSequence};
+
 my $usage =<<END
 searchKmerSeekDb.pl -query in.fasta -db db.fasta -kmerdb kmer.db -out out.tsv
 
 Finds similar sequences via matching first or last kmers and reports the top one.
-The input file should have a single sequence
+The input file should have a single sequence. The output is tab-delimited with fields
+  @outFields
+where "q" and "s" are short for query and subject, and identity ranges from 0 to 1.
 
 Optional arguments:
 -debug
@@ -39,22 +44,22 @@ my $usearch = "$RealBin/../../PaperBLAST/bin/usearch";
 die "No such executable: $usearch\n" unless -x $usearch;
 
 my $state = {};
-(undef, my $seq) = ReadFastaEntry($fhQuery, $state);
-die "No input sequence\n" unless $seq;
+my ($queryHeader, $querySeq) = ReadFastaEntry($fhQuery, $state);
+die "No input sequence\n" unless $querySeq;
 
 my ($kmerLen) = $dbh->selectrow_array("SELECT LENGTH(kmer) FROM KmerLast limit 1;");
 die "No kmer length\n" unless $kmerLen > 0;
 
 # Strip leading methionines, since that is how the index works. Also strip any *
-my $seqM = $seq;
-$seqM =~ s/^[Mm]+//;
-$seqM =~ s/[*]//g;
-my $kmer1 = substr($seqM, 0, $kmerLen);
+my $querySeqM = $querySeq;
+$querySeqM =~ s/^[Mm]+//;
+$querySeqM =~ s/[*]//g;
+my $kmer1 = substr($querySeqM, 0, $kmerLen);
 my $hits1 = $dbh->selectcol_arrayref("SELECT seek FROM KmerFirst WHERE kmer = ? ORDER BY seek", {}, $kmer1);
 
 my $hits2 = [];
-if (length($seqM) > $kmerLen) {
-  my $kmer2 = substr($seqM, length($seqM) - $kmerLen);
+if (length($querySeqM) > $kmerLen) {
+  my $kmer2 = substr($querySeqM, length($querySeqM) - $kmerLen);
   $hits2 = $dbh->selectcol_arrayref("SELECT seek FROM KmerLast WHERE kmer = ? ORDER BY seek", {}, $kmer2);
 }
 
@@ -100,7 +105,7 @@ foreach my $i (0..(scalar(@fetch)-1)) {
 }
 
 open(my $fhOut, ">", $outFile) || die "Cannot write to $outFile";
-print $fhOut join("\t", qw{identity alnLength mismatch nGaps qBegin qEnd sBegin sEnd header sequence})."\n";
+print $fhOut join("\t", @outFields)."\n";
 
 if (@fetch == 0) {
   close($fhOut) || die "Error writing to $outFile\n";
@@ -125,10 +130,11 @@ open (my $fhHits, "<", "$tmpPre.hits") || die "Cannot read $tmpPre.hits";
 while (my $line = <$fhHits>) {
   chomp $line;
   my (undef, $header, $identity, $aLen, $mm, $nGaps, $qBeg, $qEnd, $sBeg, $sEnd) = split /\t/, $line;
+  my $seq = $headerToSeq{$header};
   die "Unknown header from usearch in $tmpPre.hits"
-    unless exists $headerToSeq{$header};
-  print $fhOut join("\t", $identity, $aLen, $mm, $nGaps, $qBeg, $qEnd, $sBeg, $sEnd,
-                    $header, $headerToSeq{$header})."\n";
+    unless defined $seq;
+  print $fhOut join("\t", $queryHeader, $header, $identity, $aLen, $mm, $nGaps, 
+                    $qBeg, $qEnd, $sBeg, $sEnd, $seq) . "\n";
 }
 close($fhHits) || die "Error reading $tmpPre.hits\n";
 close($fhOut) || die "Error writing to $outFile\n";
