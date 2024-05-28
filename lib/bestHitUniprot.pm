@@ -31,9 +31,10 @@ sub bestHitUniprot($) {
   my @hits = ();
 
   # SANSparallel is currently not supporting uniprot db searches (it points at swissprot instead).
-  # So, use both that and the AlphaFold database, which has some random diverse bacteria in it
+  # The parsing code below also supports the AlphaFold database, but only the verison 2 database,
+  # which is only slightly bigger than SwissProt
 
-  foreach my $db ("swiss", "AlphaFold") {
+  foreach my $db ("swiss") {
     my $URL = "${base}?db=${db}&mode=table&H=1&seq=$seq";
     print "<!-- SANSparallel URL $URL -->\n";
     my $result = get($URL);
@@ -53,7 +54,7 @@ sub bestHitUniprot($) {
 
     # was getting geneName and species as well from the split
     my (undef, undef, $identity, $ranges, $alnLength, $bits, $eValue, $idSpec, $desc,
-        $species, $geneName) = split "</TD>\s*<TD[^>]*>", $row;
+        $species, $geneName) = split "</TD>[ \t]*<TD[^>]*>", $row;
     return $parseError
       unless $ranges =~ m/^(\d+)-(\d+):(\d+)-(\d+)$/;
     my ($qBegin, $qEnd, $sBegin, $sEnd) = ($1,$2,$3,$4);
