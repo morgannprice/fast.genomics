@@ -40,7 +40,7 @@ open(my $fhFaa, "<", $dbFasta) || die "Cannot read $dbFasta\n";
 die "No such file: $dbFile\n" unless -e $dbFile;
 my $dbh = DBI->connect("dbi:SQLite:dbname=$dbFile","","",{ RaiseError => 1 }) || die $DBI::errstr;
 
-my $usearch = "$RealBin/../../PaperBLAST/bin/usearch";
+my $usearch = "$RealBin/../bin/usearch";
 die "No such executable: $usearch\n" unless -x $usearch;
 
 my $state = {};
