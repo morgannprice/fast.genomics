@@ -1,4 +1,4 @@
-Requirements for setting up the web site:
+SETTING UP THE WEB SITE
 
 Various perl libraries, as described in the PaperBLAST code base. This
 includes CGI and BioPerl.
@@ -32,13 +32,7 @@ neighbor.faa.gz (created by the bin/build.pl script). It can also have
 a 1-line file, gtdb.version, to show which release of GTDB it is based
 on.
 
-For best performance, run build.pl with -k 6. And run
-  mmseqs touchdb data/mmseqsdb
-to make sure that mmseq's index is in main memory. build.pl runs this
-command, but you might need to rerun it periodically to keep the index
-in memory.
-
-The bin directory must include the mmseqs2 executable (named mmseqs)
+The bin directory must include the mmseqs2 executable (named mmseqs).
 
 To fetch identifiers from the fitness browser, neighbor/fbrowse_data
 must include the fitness browser database (both sqlite and
@@ -55,4 +49,71 @@ top of the main page and some other pages.
 
 For the tblastn feature of the blastGenome.cgi to work, the fasta
 files for the genome sequences must be in ind/refseq_{gid}.fna (these
-will be created by fetchAssemblies.pl if the directories line up).
+will be created by fetchAssemblies.pl, see below).
+
+BUILDING THE MAIN DATABASE
+
+You can download the main database and the sub-databases from the
+fast.genomics web site. If you want to build it yourself, the first
+step for building the main database is to select which representative
+genomes to include. Then, run
+
+bin/fetchAssemblies.pl -table top.tsv -dir ind
+bin/build.pl -genomes top.tsv -fetched top.tsv.fetched -in ind -out data -k 6
+
+top.tsv can be built from the GTDB tables and must include the
+fields accession (like RS_GCF_003096835.1 or GB_GCA_001487125.1),
+fetch (with the RS_ or GB_ prefix removed; this is not included in
+GTDB's tables), ncbi_assembly_name, ncbi_strain_identifiers,
+gtdb_taxonomy, and ncbi_taxonomy. 
+
+ind is a directory into which all the assemblies will be downloaded.
+
+For fastest performance of homology searches, run build.pl with kmer
+size 6 (-k 6).
+
+Also, to ensure that mmseq's index is kept in main memory, run
+  mmseqs touchdb data/mmseqsdb
+once an hour. (build.pl runs this step, so you need not do it
+initially.) To speed up queries against sub-databases, you may
+also want to run
+  bin/touchSubDbs.pl -all -fraction 0.00003
+every so often.
+
+BUILDING THE SUB-DATABASES
+
+The steps for building the sub-databases are:
+
+bin/fetchAssemblies.pl -table all.tsv -dir ind
+
+bin/buildSubDbs.pl -genomes all.tsv -in ind -out data -nCPUs 40
+
+sqlite3 data/neighbor.db <<END
+.mode tabs
+DELETE FROM SubDb;
+.import data/SubDbs.tsv SubDb
+END
+
+bin/buildAllGenome.pl -dir data
+
+(buildAllGenome.pl will load the AllGenomes table into a database file
+that was previously built using build.pl)
+
+BUILDING THE UNIPROT KMER DATABASE
+
+Fast searching for nearly-identical hits to UniProt
+(bestHitUniprot.cgi) requires a separate database. This can be built
+using
+
+bin/buildUniKmer uni
+
+It will create the uni/ subdirectory and populate it with the
+UniProtKB fasta file (sorted.faa, with duplicate sequences removed)
+and the kmer database (sorted_kmer.db). As of May 2024, these require
+190 GB of disk space (but they do not need do to be kept in
+memory). Building them requires another ~10 GB of space in the
+temporary directory (either $TMPDIR or /tmp).
+
+For the best-hit uniprot tool to work (bestHitUinprot.cgi or
+searchKmerSeekDb.pl), bin/usearch must be the usearch
+executable. The free 32-bit version will work fine.
