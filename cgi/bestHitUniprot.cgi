@@ -25,6 +25,14 @@ start_page('title' => "Find the best match in UniProt",
 autoflush STDOUT 1; # show preliminary results
 
 my %query = parseGeneQuery($query);
+if (defined $query{genes}) {
+  my $gene = $query{genes}[0];
+  $query{seqDesc} = $gene->{locusTag} . " " . $gene->{desc};
+  my ($seq) = getDbHandle()->selectrow_array(
+    "SELECT sequence FROM Protein WHERE proteinId = ?",
+    { Slice => {} }, $gene->{proteinId});
+  $query{seq} = $seq if defined $seq;
+}
 
 if (!defined $query{seq}) {
   print p(b($query{error})) if $query{error};
