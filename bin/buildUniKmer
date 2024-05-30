@@ -1,0 +1,56 @@
+#!/bin/bash
+# Build the kmer index of UniProt (used by searchKmerSeekDb.pl and bestHitUniprot.cgi)
+
+# fail on errors
+set -e
+DIR="$1"
+GB=20
+CPU=10
+
+if [ "$DIR" == "" ]; then
+  echo Usage: buildUniKmer directory
+  echo "  Builds the kmer index of UniProt. Will create the directory if necessary."
+  echo "  As of May 2024, requires 190 GB of free disk space (UniProtKB has 249M entries)"
+  echo "  Requires $GB GB of RAM and uses up to $CPU CPUs"
+  exit 0
+fi
+
+if [ ! -x "bin/buildKmerSeekDb.pl" ]; then
+  echo Executable bin/buildKmerSeekDb.pl not found
+  echo Must be run from the top fast.genomics directory
+  exit 1
+fi
+if [ ! -d "$DIR" ]; then
+  mkdir $DIR
+fi
+
+echo Building UniProt kmer index into $DIR
+echo Redirecting output to $DIR/build.log
+exec >& $DIR/build.log
+
+# If UNIPROT_FETCHED is set, assume that the gz files are alreayd fetched
+if [ "$UNIPROT_FETCHED" == "" ]; then
+  echo -n "Fetching UniProtKB release: "
+  wget -q -O - https://ftp.uniprot.org/pub/databases/uniprot/relnotes.txt | head -1
+  wget -q -O - https://ftp.uniprot.org/pub/databases/uniprot/relnotes.txt > $DIR/release
+
+  wget -q -O $DIR/uniprot_sprot.fasta.gz https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.fasta.gz 
+  wget -q -O $DIR/uniprot_trembl.fasta.gz https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.fasta.gz 
+  echo Fetched uniprot files
+else
+  echo -n "Using UniProtKB release: "
+  head -1 $DIR/release
+fi
+du -hsc $DIR/*fasta.gz
+
+echo Sorting by sequence
+zcat $DIR/uniprot_{sprot,trembl}.fasta.gz | bin/fastaUniq.pl | fastaToTab.pl |
+  sort -t $'\t' -k 2 --parallel=$CPU --buffer-size=${GB}G |
+  perl -ane 'chomp; ($header,$seq) = split /\t/; print ">$header\n$seq\n"' > $DIR/sorted.faa
+echo -n "Built sorted.faa: "
+du -hsc $DIR/sorted.faa
+
+bin/buildKmerSeekDb.pl -in $DIR/sorted.faa -out $DIR/sorted_kmer.db
+echo -n "Finished. Space required for the data and the index: "
+du -hsc $DIR/sorted.faa $DIR/sorted_kmer.db 
+echo "(The $DIR/*.gz files could be removed)"
