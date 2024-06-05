@@ -30,11 +30,10 @@ sub bestHitUniprot($) {
   my $base = "http://ekhidna2.biocenter.helsinki.fi/cgi-bin/sans/sans.cgi";
   my @hits = ();
 
-  # SANSparallel is currently not supporting uniprot db searches (it points at swissprot instead).
-  # The parsing code below also supports the AlphaFold database, but only the verison 2 database,
-  # which is only slightly bigger than SwissProt
+  # The parsing code below also supports the AlphaFold database (consider using that in case their
+  # copy of uniprot is broken)
 
-  foreach my $db ("swiss") {
+  foreach my $db ("uniprot") {
     my $URL = "${base}?db=${db}&mode=table&H=1&seq=$seq";
     print "<!-- SANSparallel URL $URL -->\n";
     my $result = get($URL);
@@ -42,13 +41,13 @@ sub bestHitUniprot($) {
     my @lines = split /\n/, $result;
     my $iHeader;
     for (my $i = 0; $i < scalar(@lines); $i++) {
-      if ($lines[$i] =~ m!^<TR><TH>Rank.*</TR>$!i) {
+      if ($lines[$i] =~ m!^<TR><TH>Rank.*</TR>!i) {
         $iHeader = $i;
         last;
       }
     }
-    return { 'error' => 'cannot parse response from SANSparallel' } unless
-      defined $iHeader;
+    print "<P>No header\n" unless defined $iHeader;
+    return $parseError unless defined $iHeader;
     my $row = $lines[$iHeader+1];
     next unless $row =~ m!<TR><TD>1</TD><TD>(.*)</TD>!; # no hits
 
@@ -59,7 +58,7 @@ sub bestHitUniprot($) {
       unless $ranges =~ m/^(\d+)-(\d+):(\d+)-(\d+)$/;
     my ($qBegin, $qEnd, $sBegin, $sEnd) = ($1,$2,$3,$4);
     my ($prefix, $uniprotId);
-    if ($db eq "swiss") {
+    if ($db eq "swiss" || $db eq "uniprot") {
       $idSpec = $1 if $idSpec =~ m!^<A HREF=.*>(.*)</A>$!i;
       return $parseError unless $idSpec =~ m/^([a-z]+)[|]([^|]+)/;
       ($prefix, $uniprotId) = ($1,$2);
