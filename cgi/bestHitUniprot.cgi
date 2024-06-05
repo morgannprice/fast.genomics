@@ -93,7 +93,7 @@ unless (-e $uniDb && -e $uniKmerDb) {
 }
 
 if (!defined $hit) {
-  print p("No nearly-exact matches in UniProt or SwissProt. Searching SwissProt with",
+  print p("No nearly-exact matches in UniProt. Searching with",
           a({ -href => "http://ekhidna2.biocenter.helsinki.fi/cgi-bin/sans/sans.cgi"},
             "SANSparallel") 
           . "."),
@@ -153,9 +153,6 @@ if (exists $hit->{uniprotId}) {
 }
 
 print p(a({-href => "bestHitUniprot.cgi"}, "Try another query"));
-
-print p("Powered by", a({-href => $hit->{serviceURL}}, $hit->{service}))
-  if exists $hit->{service};
 
 print
   h3("Other sequence analysis tools"),
