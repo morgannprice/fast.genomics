@@ -13,6 +13,10 @@ our (@ISA,@EXPORT);
              removeDuplicates
           };
 
+sub tmpPre() {
+  return ($ENV{TMPDIR} || "/tmp") . "/clusterBLASTp.$$";
+}
+
 # Writes the reduced fasta to out and the clustering to out.clstr
 # Saves the cd-hit log in out.log
 # The input is a hash, which must include faa, cdhit, and out
@@ -29,7 +33,7 @@ sub cluster {
   my $minCoverage = $param{minCoverage} || 0.8;
 
   my $clusterCmd = "$cdhit -i $faa -o $out -c $minIdentity -M 0 -T $nCPUs -n 5 -d 0"
-    . " -aS $minCoverage -aL $minCoverage >& $out.log";
+    . " -aS $minCoverage -aL $minCoverage 2>&1 > $out.log";
   system($clusterCmd) == 0 || die "cd-hit failed:\n$clusterCmd\n$!\n";
   return parseClustering("$out.clstr");
 }
@@ -80,7 +84,7 @@ sub parseClustering($) {
 sub clusteringIntoDb($$) {
   my ($clusters, $dbFile) = @_;
   die "No such file: $dbFile\n" unless -e $dbFile;
-  my $tmpFile = ($ENV{TMPDIR} || "/tmp") . "/clusterBLASTp.$$";
+  my $tmpFile = ($ENV{TMPDIR} || "../tmp") . "/clusterBLASTp.$$";
   open (my $fh, ">", $tmpFile) || die "Cannot write to $tmpFile\n";
   foreach my $clusterId (sort keys %$clusters) {
     foreach my $proteinId (@{ $clusters->{$clusterId} }) {
@@ -154,7 +158,7 @@ sub runBLASTp {
   my $nCPUs = $param{nCPUs} || 8;
   my $dbSize = $param{dbSize} || 0;
 
-  my $tmpPre = ($ENV{TMPDIR} || "/tmp") . "/clusterBLASTp.$$";
+  my $tmpPre = tmpPre();
   my $tmpFaa = "$tmpPre.faa";
   open (my $fhFaa, ">", $tmpFaa) || die "Cannot write to $tmpFaa";
   print $fhFaa ">query\n$query\n";
@@ -166,13 +170,13 @@ sub runBLASTp {
     $blastCmd = "$exeDir/blastp -evalue $minEValue -num_threads $nCPUs -query $tmpFaa -db $db.plusdb"
       . " -max_target_seqs $maxHits -outfmt 6 -out $tmpHits";
     $blastCmd .= " -dbsize $dbSize" if $dbSize;
-    $blastCmd .= " >& /dev/null";
+    $blastCmd .= " 2>&1 > /dev/null";
   } else {
     $blastCmd = qq{$exeDir/blastall -p blastp -e $minEValue -z $dbSize -a $nCPUs -i $tmpFaa -d $db -F "m S" -m 8}
-      . " -b $maxHits -v $maxHits -o $tmpHits >& /dev/null";
+      . " -b $maxHits -v $maxHits -o $tmpHits 2>&1 > /dev/null";
   }
   die "Run: $blastCmd\n" if ! $blastPlus;
-  system($blastCmd) == 0 || die "runBLASTp() failed:\n$blastCmd\n$!";
+  system($blastCmd) == 0 || die "runBLASTp() failed ? :\n$blastCmd\n$!";
   unlink($tmpFaa);
 
   my $hits = parseBLASTpHits($tmpHits);
@@ -308,7 +312,7 @@ sub clusteredBLASTp {
   my $proteinIds = expandByClusters(\@clusterIds, $dbh);
   splice @$proteinIds, $nMaxHits2;
   print "<!-- expanded to " . scalar(@$proteinIds) . " -->\n" unless $quiet;
-  my $tmpPre = ($ENV{TMPDIR} || "/tmp") . "/clusterBLASTp.$$";
+  my $tmpPre = tmpPre();
   my $nAA = proteinsToFaa($proteinIds, "$tmpPre.faa", $dbh);
   print "<!-- fetched protein sequences -->\n" unless $quiet;
 
