@@ -226,7 +226,7 @@ sub computeSubDbHomologs($) {
                     'quiet' => $quietMode,
                     'dbSize' => $nAA,
                     'bin' => "../bin")
-      } );
+  } );
 }
 
 # The query may be a locus tag in the database,
