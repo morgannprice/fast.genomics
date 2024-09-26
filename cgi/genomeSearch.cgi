@@ -32,7 +32,7 @@ if (! $geneRedirect && $query =~ m/^[a-zA-Z0-9_.]+$/) {
   $geneRedirect = $genesFromProteinId->[0] if @$genesFromProteinId == 1;
 }
 if ($geneRedirect) {
-  print redirect(-url => addOrderTourl("gene.cgi?locus=" . $geneRedirect->{locusTag}));
+  print redirect(-url => addOrderToURL("gene.cgi?locus=" . $geneRedirect->{locusTag}));
   exit(0);
 }
 
