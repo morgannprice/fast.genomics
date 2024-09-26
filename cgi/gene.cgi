@@ -5,6 +5,7 @@ use CGI::Carp qw(warningsToBrowser fatalsToBrowser);
 use IO::Handle; # for autoflush
 use DBI;
 use HTML::Entities;
+use LWP::Simple;
 use List::Util qw{min max};
 use lib "../lib";
 use genesSvg;
@@ -18,22 +19,47 @@ use pbweb qw{commify};
 # locus -- a locus tag in the database (with correct capitalization)
 # optional CGI arguments:
 # order (which subdb to use)
+# get=ntseq (report the nucleotide sequence as text)
 my $cgi = CGI->new;
 my $locusTag = param('locus') || die "locus must be specified";
 setOrder(param('order'));
 
-start_page('title' => encode_entities($locusTag));
-autoflush STDOUT 1; # show preliminary results
+my $get = param('get') || "";
+die unless $get eq "" || $get eq "ntseq";
+if ($get eq "") {
+  start_page('title' => encode_entities($locusTag));
+  autoflush STDOUT 1; # show preliminary results
+} else {
+  print "Content-Type:text\n\n";
+}
+  
 
 my $dbh = getDbHandle();
 my $gene = $dbh->selectrow_hashref("SELECT * FROM Gene WHERE locusTag = ?",
                                    {}, $locusTag);
 if (!defined $gene) {
+  die "No such locustag" if $get ne "";
   print p(b("Sorry, cannot find a gene with locus tag ", encode_entities($locusTag)));
   finish_page();
 }
 
-my $focalColor = '#a6cee3';; # see neighbors.pm
+if ($get eq "ntseq") {
+  my $fetch = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.cgi?"
+    . join("&", "db=nuccore",
+           "rettype=fasta",
+           "id=" . $gene->{scaffoldId},
+           "seq_start=" . $gene->{begin},
+           "seq_stop=" . $gene->{end},
+           "strand=" . ($gene->{strand} eq "+" ? 1 : 2));
+  my $fasta  = get($fetch);
+  die "Cannot fetch fasta from NCBI using\n$fetch\n" unless $fasta;
+  my $header = $locusTag . " " . $gene->{scaffoldId} . ":" . $gene->{begin} . "-" . $gene->{end} . ":" . $gene->{strand};
+  $fasta =~ s/^>[^\n]+/>$header/;
+  print $fasta;
+  exit(0);
+}
+
+my $focalColor = '#a6cee3'; # see neighbors.pm
 
 my $gid = $gene->{gid};
 my $genome = gidToGenome($gid) || die "Cannot find genome $gid";
@@ -72,13 +98,17 @@ my $ncbiBrowser = "https://www.ncbi.nlm.nih.gov/nuccore/$gene->{scaffoldId}?repo
                  . "&from=$showBegin&to=$showEnd";
 my $scaffold = getDbHandle()->selectrow_hashref("SELECT * from Scaffold WHERE scaffoldId = ?",
                                                 {}, $gene->{scaffoldId});
+
+my $ntURL = addOrderToURL("gene.cgi?locus=$locusTag&get=ntseq");
+
 push @lines, "Location: "
   . a({-title => $scaffold->{scaffoldDesc}, -style => "text-decoration: none;"},
       $gene->{scaffoldId})
   . " "
   . a({-href => $ncbiBrowser, -title => "NCBI browser"},
       $gene->{begin} . ":" . $gene->{end})
-  . " ($gene->{strand})";
+  . " ($gene->{strand})"
+  . " " . small(a({-href => $ntURL, -title => "fetch the nucleotide sequence from NCBI"}, "nt. sequence"));
 
 print map p({-style => "margin-top: 0.25em; margin-bottom: 0.25em;"}, $_), @lines;
 print "\n";
