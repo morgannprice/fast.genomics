@@ -52,7 +52,7 @@ my $taxList = getDbHandle()->selectall_arrayref("SELECT * from Taxon WHERE taxon
 if (@$taxList == 0 && getOrder() ne "" && $query ne "") {
   # Try searching in top-level database?
   $taxList = getTopDbHandle()->selectall_arrayref("SELECT * from Taxon WHERE taxon LIKE ? LIMIT 200",
-                                                {Slice => {} }, $query);
+                                                  {Slice => {} }, $query);
   if (@$taxList > 0) {
     # forward to the top-level database
     print redirect(-url => "findTaxon.cgi?query=".uri_escape($query));
@@ -60,7 +60,7 @@ if (@$taxList == 0 && getOrder() ne "" && $query ne "") {
   }
 }
 
-if (@$taxList == 0 && getOrder() eq "" && $query ne "") {
+if (@$taxList == 0 && $query ne "") {
   # Search in AllGenome for this species? Put in-top genomes first
   my $genomes = getTopDbHandle()->selectall_arrayref(
     "SELECT * FROM AllGenome WHERE gtdbSpecies LIKE ? ORDER BY inTop DESC",
