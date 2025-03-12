@@ -28,7 +28,7 @@ my $query = param('query') || "";
 my ($seqDesc, $seq);
 
 my $inputError;
-if (defined $query && $query !~ m/^\s+$/) {
+if ($query ne "" && $query !~ m/^\s+$/) {
    $query =~ s/^\s+//;
    $query =~ s/\s+$//;
    my @lines = split /\n/, $query;
@@ -84,7 +84,7 @@ if (! $seq) {
 } # end no query
 
 if ($seqDesc eq "") {
-  $seqDesc = substr($seq, 10) . "... (" . length($seq) . " characters)";
+  $seqDesc = substr($seq, 0, 10) . "... (" . length($seq) . " characters)";
 }
 
 my $usearch = "../bin/usearch";
@@ -122,8 +122,10 @@ close($fh) || die "Error reading $tmpHits";
 unlink($tmpFna);
 unlink($tmpHits);
 splice @hits, $maxHits if @hits > $maxHits;
-my @row = ("Found", scalar(@hits), "hits");
-push @row, "(the maximum)" if @hits == $maxHits;
+my $found = "Found " . scalar(@hits) . " hits";
+$found .=  " (the maximum)" if @hits == $maxHits;
+$found .= ", or try " . a({-href => "16Ssim.cgi"}, "another query");
+print $found, "\n";
 
 if (@hits > 0) {
   print
