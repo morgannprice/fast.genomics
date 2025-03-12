@@ -80,6 +80,8 @@ if (!defined $query{genes} && !defined $query{seq}) {
         span({-style => "font-size:smaller;"}, "use % for wild cards"),
         end_form);
 
+  print p("Or search by", a({-href => "16Ssim.cgi"}, "16S sequence"));
+
   my ($nGenomes) = getTopDbHandle()->selectrow_array("SELECT COUNT(*) FROM Genome");
   $nGenomes = commify($nGenomes);
   my $domains = getTopDbHandle()->selectcol_arrayref("SELECT taxon FROM Taxon WHERE level = ?", {}, "domain");
