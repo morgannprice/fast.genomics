@@ -33,7 +33,7 @@ foreach my $in (@in) {
   open(my $fh, "<", "$in.features.tab")
     || die "Cannot read $in.features.tab";
   while (my $line = <$fh>) {
-    next unless $line =~ m/^rRNA\t/ && $line =~ m/16S ribosomal RNA/;
+    next unless $line =~ m/^rRNA\t/ && $line =~ m/16S|SSU|small/;
     chomp $line;
     my @F = split /\t/, $line;
     my $scaffold = $F[6];
