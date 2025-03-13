@@ -13,6 +13,7 @@ lastal and lastdb (for LAST), we use version 1422
   code at https://gitlab.com/mcfrith/last
 muscle3, we use version 3.8.31
 FastTree, we use version 2.1.11 SSE3
+usearch, we use version 11.0.667 (public domain)
 
 The bin/blast directory must include the (original) BLAST executables
 formatdb, blastall, and bl2seq; we use version 2.2.26
@@ -31,6 +32,9 @@ The data/ subdirectory must include neighbor.db, mmseqsdb*, and
 neighbor.faa.gz (created by the bin/build.pl script). It can also have
 a 1-line file, gtdb.version, to show which release of GTDB it is based
 on.
+
+For 16S search, it must include data/filtered16S.udb (a usearch
+database).
 
 The bin directory must include the mmseqs2 executable (named mmseqs).
 
@@ -117,3 +121,23 @@ temporary directory (either $TMPDIR or /tmp).
 For the best-hit uniprot tool to work (bestHitUinprot.cgi or
 searchKmerSeekDb.pl), bin/usearch must be the usearch
 executable. The free 32-bit version will work fine.
+
+BUILDING THE 16S DATABASE
+
+These commands will create a fasta file of 16S sequences, each with
+headers of the form gid:locusTag, convert it to a usearch database
+(udb) file, and load the 16S sequences into the All16S table of the
+top-level sqlite3 database.
+
+sqlite3 data/neighbor.db 'select gid FROM AllGenome;' > gids.all
+# This may take hours; ind is the directory that the genomes were
+# downloaded into from refseq
+(for i in `cat gids.all`; do bin/get16S.pl -prefix $i -in ind/refseq_${i}; done) > fast16S.fna 2> fast16S.log
+bin/filter16S.pl -fna data/fast16S.fna -dir data > data/filtered16S.fna
+bin/usearch -makeudb_usearch data/filtered16S.fna -output data/filtered16S.udb
+fastaToTab.pl < data/filtered16S.fna | sed -e 's/:/\t/' > data/filtered16S.tsv
+sqlite3 data/neighbor.db <<END
+.mode tabs
+DELETE FROM All16S;
+.import data/filtered16S.tsv All16S
+END
