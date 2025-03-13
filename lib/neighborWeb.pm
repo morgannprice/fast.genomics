@@ -56,6 +56,8 @@ sub getQuietMode() {
 
 my $memOrder = "";
 my $memSubDb = undef;
+my $memTopDbh = undef;
+my $memSubDbh = undef;
 sub getOrder() { return $memOrder; }
 sub getSubDb() { return $memSubDb; }
 
@@ -71,6 +73,7 @@ sub setOrder($) {
         unless defined $prefix;
     $memSubDb = $prefix;
     die "Invalid prefix $prefix" unless $prefix =~ m/^[a-zA-Z0-9._-]+$/;
+    $memSubDbh = undef; # in case it is being re-set
   }
 }
 
@@ -87,7 +90,6 @@ sub orderToHidden() {
   return qq[<INPUT type="hidden" name="order" value="$memOrder">];
 }
 
-my $memTopDbh = undef;
 sub getTopDbHandle() {
   if (!defined $memTopDbh) {
     my $sqldb = "../data/neighbor.db";
@@ -96,7 +98,6 @@ sub getTopDbHandle() {
   return $memTopDbh;
 }
 
-my $memSubDbh;
 sub getSubDbHandle {
   if (!defined $memSubDbh) {
     my $sqldb = "../data/$memSubDb/sub.db";
@@ -339,10 +340,28 @@ sub parseGeneQuery($) {
 }
 
 # Case insensitive if the locus tag is all upper case
+# May re-set the order if it finds a 16S gene using the All16S table
 sub locusTagToGene($) {
   my ($locusTag) = @_;
-  return getDbHandle()->selectrow_hashref("SELECT * FROM Gene WHERE locusTag = ? OR locusTag = ?",
-                                          {}, $locusTag, uc($locusTag));
+  my $gene = getDbHandle()->selectrow_hashref("SELECT * FROM Gene WHERE locusTag = ? OR locusTag = ?",
+                                              {}, $locusTag, uc($locusTag));
+  return $gene if $gene;
+  my $obj = getTopDbHandle()->selectrow_hashref("SELECT * FROM All16S WHERE locusTag = ? OR locusTag = ?",
+                                                {}, $locusTag, uc($locusTag));
+  if ($obj) {
+    my $genome = getTopDbHandle()->selectrow_hashref("SELECT * from AllGenome WHERE gid = ?",
+                                                     {}, $obj->{gid});
+    die "Unknown gid $obj->{gid}" unless $genome;
+    # In theory, this genome could be inTop or its prefix could match getOrder(), but
+    # then, it should have been found by the Gene query above
+    # So change the order
+    setOrder($genome->{prefix});
+    $gene = getDbHandle()->selectrow_hashref("SELECT * from Gene WHERE locusTag = ?",
+                                             {}, $obj->{locusTag});
+    die "Unknown $obj->{locusTag}" unless $gene;
+    return $gene;
+  }
+  return undef;
 }
 
 sub gidToGenome($) {
