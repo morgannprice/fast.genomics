@@ -129,3 +129,13 @@ CREATE TABLE SubDb (
   nProteins INT NOT NULL,
   nClusters INT NOT NULL
 );
+
+/* All 16S loci (after filtering out short sequences) */
+CREATE TABLE All16S (
+  gid TEXT NOT NULL,
+  locusTag TEXT NOT NULL,
+  sequence TEXT NOT NULL,
+  PRIMARY KEY (gid,locusTag)
+);
+CREATE INDEX All16SLocus ON All16S (locusTag, gid);
+
