@@ -5,8 +5,9 @@ use CGI::Carp qw(warningsToBrowser fatalsToBrowser);
 use IO::Handle; # for autoflush
 use DBI;
 use HTML::Entities;
-use LWP::Simple;
+use LWP::Simple qw{get};
 use List::Util qw{min max};
+use URI::Escape qw{uri_escape};
 use lib "../lib";
 use genesSvg;
 use neighbor;
@@ -32,7 +33,6 @@ if ($get eq "") {
 } else {
   print "Content-Type:text\n\n";
 }
-  
 
 my $dbh = getDbHandle();
 my $gene = $dbh->selectrow_hashref("SELECT * FROM Gene WHERE locusTag = ?",
@@ -42,27 +42,38 @@ if (!defined $gene) {
   print p(b("Sorry, cannot find a gene with locus tag ", encode_entities($locusTag)));
   finish_page();
 }
+my $gid = $gene->{gid};
+my $genome = gidToGenome($gid) || die "Cannot find genome $gid";
+
+# If it's not protein-coding, check the All16S table
+my $obj16S;
+$obj16S = getTopDbHandle->selectrow_hashref("SELECT * from All16S WHERE locusTag = ?", {},$locusTag)
+  if $gene->{proteinId} eq "";
 
 if ($get eq "ntseq") {
-  my $fetch = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.cgi?"
-    . join("&", "db=nuccore",
-           "rettype=fasta",
-           "id=" . $gene->{scaffoldId},
-           "seq_start=" . $gene->{begin},
-           "seq_stop=" . $gene->{end},
-           "strand=" . ($gene->{strand} eq "+" ? 1 : 2));
-  my $fasta  = get($fetch);
-  die "Cannot fetch fasta from NCBI using\n$fetch\n" unless $fasta;
-  my $header = $locusTag . " " . $gene->{scaffoldId} . ":" . $gene->{begin} . "-" . $gene->{end} . ":" . $gene->{strand};
-  $fasta =~ s/^>[^\n]+/>$header/;
-  print $fasta;
+  if ($obj16S) {
+    print ">" . $locusTag .  " from " . $genome->{gtdbSpecies} . " " . $genome->{strain} . "\n";
+    my @seqPieces = $obj16S->{sequence} =~ /.{1,60}/g;
+    print join("\n", @seqPieces) . "\n";
+  } else {
+    my $fetch = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.cgi?"
+      . join("&", "db=nuccore",
+             "rettype=fasta",
+             "id=" . $gene->{scaffoldId},
+             "seq_start=" . $gene->{begin},
+             "seq_stop=" . $gene->{end},
+             "strand=" . ($gene->{strand} eq "+" ? 1 : 2));
+    my $fasta  = get($fetch);
+    die "Cannot fetch fasta from NCBI using\n$fetch\n" unless $fasta;
+    my $header = $locusTag . " " . $gene->{scaffoldId} . ":" . $gene->{begin} . "-" . $gene->{end} . ":" . $gene->{strand};
+    $fasta =~ s/^>[^\n]+/>$header/;
+    print $fasta;
+  }
   exit(0);
 }
 
 my $focalColor = '#a6cee3'; # see neighbors.pm
 
-my $gid = $gene->{gid};
-my $genome = gidToGenome($gid) || die "Cannot find genome $gid";
 
 my @lines = ();
 push @lines, "Genome: "
@@ -109,9 +120,17 @@ push @lines, "Location: "
       $gene->{begin} . ":" . $gene->{end})
   . " ($gene->{strand})"
   . " " . small(a({-href => $ntURL, -title => "fetch the nucleotide sequence from NCBI"}, "nt. sequence"));
-
 print map p({-style => "margin-top: 0.25em; margin-bottom: 0.25em;"}, $_), @lines;
 print "\n";
+
+if ($obj16S) {
+  my $fasta = ">" . $locusTag . " from " . $genome->{gtdbSpecies} . " " . $genome->{strain}
+    . "\n" . $obj16S->{sequence};
+  print p("Search for",
+          a({-href => "16Ssim.cgi?query=" . uri_escape($fasta) },
+            "similar 16S")),
+    "\n";
+}
 
 my $nearbyGenes = getNearbyGenes($gene);
 my @showGenes = grep $_->{end} >= $showBegin && $_->{begin} <= $showEnd, @$nearbyGenes;
