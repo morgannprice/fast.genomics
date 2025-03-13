@@ -92,6 +92,11 @@ my $scaffolds = getDbHandle()->selectall_arrayref(
   { Slice => {} }, $gid);
 my @pseudos = grep { $_->{desc} =~ m/pseudo/i && $_->{proteinId} eq "" } @$genes;
 my @RNAs = grep { $_->{desc} !~ m/pseudo/i && $_->{proteinId} eq "" } @$genes;
+my $objs = getTopDbHandle->selectall_arrayref(
+  "SELECT * from All16S WHERE gid = ?", { Slice => {} }, $gid);
+my $url16S = "";
+$url16S = addOrderToURL("genes.cgi?" . join("&", map "g=".$_->{locusTag}, @$objs))
+  if @$objs > 0;
 print
   p("Scaffolds:", commify(scalar(@$scaffolds))),
   p("Genes:",
@@ -105,6 +110,7 @@ print
        -style => "text-decoration: none;"},
       commify($genome->{nProteins})),
     "RNAs:", scalar(@RNAs),
+    "16S:", a({ -href => $url16S}, scalar(@$objs)),
     "pseudogenes:", scalar(@pseudos)),
   h3("Tools"),
   p(a({-href => addOrderToURL("blastGenome.cgi?gid=$gid")}, "BLAST")),
