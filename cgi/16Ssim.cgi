@@ -15,7 +15,7 @@ use lib "../../PaperBLAST/lib";
 use neighborWeb;
 
 # Optional CGI arguments:
-# query
+# query -- raw sequence, or fasta, or a 16S locusTag that is in the All16S table
 #
 # If no sequence is specified, shows an input form. Unlike other pages, locus tags are not supported as inputs.
 
@@ -25,12 +25,21 @@ my $minIdentity = 0.85; # minimum %identity
 my $maxHits = 200;
 
 my $query = param('query') || "";
+$query =~ s/^\s+//;
+$query =~ s/\s+$//;
 my ($seqDesc, $seq);
 
 my $inputError;
-if ($query ne "" && $query !~ m/^\s+$/) {
-   $query =~ s/^\s+//;
-   $query =~ s/\s+$//;
+if ($query =~ m/[_0-9]/ && $query !~ m/\n/) {
+  # presumed to be a locus tag
+  my $locus = getTopDbHandle()->selectrow_hashref("SELECT * from All16S JOIN AllGenome USING (gid) WHERE locusTag = ?", {}, $query);
+  if (defined $locus) {
+    $seqDesc = $locus->{locusTag} . " from " . $locus->{gtdbSpecies} . " " . $locus->{strain};
+    $seq = $locus->{sequence};
+  } else {
+    $inputError = "Unknown locus tag";
+  }
+} elsif ($query ne "" && $query !~ m/^\s+$/) {
    my @lines = split /\n/, $query;
    if ($query =~ m/^>/ && @lines > 1) {
      $seqDesc = shift @lines;
@@ -74,7 +83,7 @@ print p("Invalid input:", $inputError) if $inputError;
 if (! $seq) {
   print
     p(start_form(-name => 'inputForm', -method => 'GET', -action => '16Ssim.cgi'),
-      "Enter a 16S sequence, by itself or in fasta format",
+      "Enter a 16S sequence, by itself or in fasta format, or a locus tag from fast.genomics",
       br(),
       textarea( -name  => 'query', -value => '', -cols  => 90, -rows  => 8, -override => 1 ),
       br(),
@@ -130,7 +139,10 @@ print $found, "\n";
 if (@hits > 0) {
   print
     qq{<TABLE cellpadding=2 cellspacing=2>},
-    Tr(th({-style => "text-align: left"}, ['%id.', 'len.', 'Taxonomy', 'Strain', 'Locus'])),
+    Tr(th({-style => "text-align: left"},
+          [a({-title => '%identity'}, '%id.'),
+           a({-title => 'alignment length'}, 'alen.'),
+           'Taxonomy', 'Strain', 'Locus'])),
     "\n";
   my $iRow = 0;
   foreach my $row (@hits) {
@@ -141,10 +153,16 @@ if (@hits > 0) {
     die "Unknown gid $gid" unless defined $genome;
     my $orderParam = "";
     $orderParam = $genome->{prefix} unless $genome->{inTop};
+    my $alignURL = "16Salign.cgi?subject=$locusTag&query=" . uri_escape(">${seqDesc}\n$seq\n");
     my @out = ();
-    push @out, td({-style => 'text-align: right;'}, $identity);
     push @out, td({-style => 'text-align: right;'},
-                  a({-title => "$qbeg:$qend of query aligns to $sbeg:$send of $locusTag"}, $alen));
+                  a({-title => "See alignment ($mm mismatches and $gap gaps along $alen nt)",
+                     -href => $alignURL, -style => "text-decoration: none;"}, $identity));
+    my $qlen = length($seq);
+    my ($slen) = getTopDbHandle()->selectrow_array("SELECT length(sequence) FROM All16S WHERE gid = ? AND locusTag = ?",
+                                                   {}, $gid, $locusTag);
+    push @out, td({-style => 'text-align: right;'},
+                  a({-title => "$qbeg:$qend/$qlen of query aligns to $sbeg:$send/$slen of $locusTag"}, $alen));
     my @taxParts;
     foreach my $level (qw{Phylum Class Order Family}) {
       my $taxon = $genome->{"gtdb".$level};
