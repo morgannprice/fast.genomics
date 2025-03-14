@@ -13,6 +13,7 @@ use neighbor;
 # neighborWeb.pm relies on various PaperBLAST libraries
 use lib "../../PaperBLAST/lib";
 use neighborWeb;
+use pbweb qw{commify};
 
 # Optional CGI arguments:
 # query -- raw sequence, or fasta, or a 16S locusTag that is in the All16S table
@@ -80,16 +81,23 @@ autoflush STDOUT 1; # show preliminary results
 
 print p("Invalid input:", $inputError) if $inputError;
 
+my ($nGenomes) = getTopDbHandle()->selectrow_array("SELECT count(DISTINCT gid) from All16S");
+my ($nSeq) = getTopDbHandle()->selectrow_array("SELECT count(*) from All16S");
 if (! $seq) {
   print
     p(start_form(-name => 'inputForm', -method => 'GET', -action => '16Ssim.cgi'),
-      "Enter a 16S sequence, by itself or in fasta format, or a locus tag from fast.genomics",
+      "Enter a 16S sequence, by itself or in fasta format, or a locus tag from", i("fast.genomics"),
       br(),
       textarea( -name  => 'query', -value => '', -cols  => 90, -rows  => 8, -override => 1 ),
       br(),
       submit('16S search'),
       end_form);
-    finish_page();
+  print p("16S search will quickly compare your sequence to",
+          commify($nSeq),
+          "16S sequences from",
+          commify($nGenomes),
+          "genomes of diverse bacteria and archaea.");
+  finish_page();
 } # end no query
 
 if ($seqDesc eq "") {
@@ -101,7 +109,9 @@ die "No such executable: $usearch\n" unless -x $usearch;
 my $udb = "../data/filtered16S.udb";
 die "No such file: $udb\n" unless -e $udb;
 
-print p("Searching for similar 16S sequences for", encode_entities($seqDesc));
+print p("Comparing", encode_entities($seqDesc), "to",
+        commify($nSeq), "16S sequences from",
+        commify($nGenomes), "genomes");
 print showSequence($seqDesc, $seq);
 print p(sprintf("Minimum identity: %d%%, minimum alignment: %d nucleotides, query length: %d",
                 int($minIdentity*100+0.5), $minAln, length($seq)));
