@@ -303,7 +303,21 @@ my $seqDesc = $query{seqDesc}
   || length($seq) . " a.a. beginning with " . substr($seq, 0, 10);
 
 print p("Sequence name:", encode_entities($seqDesc));
+
 print showSequence($seqDesc, $seq);
+
+if (length($seq) < 20) {
+  print p({-style => "color:red;"},
+          "Warning: the sequence is under 20 amino acids, so searching for homologs is unlikely to succeed."), "\n";
+} else {
+  my @nt = $seq =~ m/[ACGTUN]/g;
+  my $fACGTUN = scalar(@nt) / length($seq);
+  if ($fACGTUN >= 0.9) {
+    print p({-style => "color:red;"},
+            sprintf("Warning: the sequence is %.1f%% nucleotide characters. Are you sure this is a protein query?",
+                    100 * $fACGTUN)), "\n";
+  }
+}
 
 my $seqDescE = uri_escape($seqDesc);
 if (hasHits($seq)) {
