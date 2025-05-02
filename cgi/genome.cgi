@@ -56,7 +56,9 @@ if ($format eq "tsv") {
 my $title = encode_entities($genome->{gtdbSpecies} . " " . $genome->{strain});
 start_page('title' => $title);
 
-print p("Genome identifier:", a({-href => "https://www.ncbi.nlm.nih.gov/data-hub/genome/$gid" }, $gid));
+print p("Genome identifier:", $gid,
+        small(a({-href => "https://www.ncbi.nlm.nih.gov/data-hub/genome/$gid" }, "NCBI"),
+              a({-href => "https://gtdb.ecogenomic.org/genome?gid=$gid" }, "GTDB")));
 
 print p("NCBI assembly name:", encode_entities($genome->{assemblyName}));
 
@@ -165,5 +167,5 @@ foreach my $scaffold (@$scaffolds) {
            td({-valign => "top", -align => "right"}, commify($scaffold->{length}))),
              "\n";
 }
-print "<\TABLE>\n";
+print "</TABLE>\n";
 finish_page();
