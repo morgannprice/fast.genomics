@@ -80,7 +80,12 @@ if (!defined $query{genes} && !defined $query{seq}) {
         span({-style => "font-size:smaller;"}, "use % for wild cards"),
         end_form);
 
-  print p("Or search by", a({-href => "16Ssim.cgi"}, "16S sequence"));
+  print
+    h3("Other tools"),
+    start_ul(),
+    li("Search by", a({-href => "16Ssim.cgi"}, "16S sequence")),
+    li("Fetch", a({-href => addOrderToURL("fetchSeqs.cgi") }, "protein sequences")),
+    end_ul();
 
   my ($nGenomes) = getTopDbHandle()->selectrow_array("SELECT COUNT(*) FROM Genome");
   $nGenomes = commify($nGenomes);
