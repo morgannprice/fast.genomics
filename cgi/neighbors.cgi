@@ -35,7 +35,7 @@ use MOTree; # from PaperBLAST/lib/
 #     or tsv (tab-delimited table of all genes shown)
 #     or newick (the tree) or svg
 # tree -- set to build a tree (if needed) and render it
-# minCluster -- minimum number or % of cluster representatives
+# minClusterSpec -- minimum number or % of cluster representatives
 #   for it to be highlighted/colored
 
 my $cgi = CGI->new;
@@ -259,13 +259,17 @@ if ($format eq "") {
   push @links, a({-href => "hitTaxa.cgi?$options"},
                  "taxonomic distribution"). " of its homologs";
   my @downloads = ();
-  push @downloads, a({ -href => "neighbors.cgi?${options}&n=${n}&hitType=${hitType}&tree=${showTree}&format=svg&compact=${compact}",
+  my $downloadBase = join("&",
+                          "neighbors.cgi?" . $options,
+                          "n=$n", "kb=$kbShown", "hitType=$hitType",
+                          "compact=$compact", "tree=$showTree", "minClusterSpec=" . uri_escape($minClusterSpec));
+  push @downloads, a({ -href => "$downloadBase&format=svg",
                        -title => "figure in SVG format"}, "SVG");
-  push @downloads, a({ -href => "neighbors.cgi?${options}&n=${n}&hitType=${hitType}&format=fasta",
+  push @downloads, a({ -href => "$downloadBase&format=fasta",
                        -title => "homologs shown (fasta format)"}, "protein sequences");
-  push @downloads, a({ -href => "neighbors.cgi?${options}&n=${n}&hitType=${hitType}&kb=${kbShown}&format=tsv",
+  push @downloads, a({ -href => "$downloadBase&format=tsv",
                        -title => "all genes shown (tab-delimited)"}, "table of genes");
-  push @downloads, a({ -href => "neighbors.cgi?${options}&n=${n}&hitType=${hitType}&kb=${kbShown}&tree=1&format=newick",
+  push @downloads, a({ -href => "$downloadBase&format=newick",
                        -title => "tree (newick format, rooted)"}, "phylogenetic tree")
     if $showTree;
   print p("Or see", join(" or ", @links).".",
