@@ -75,13 +75,13 @@ foreach my $row (@rows) {
     } or do {
       my $error = $@;
       print STDERR join("\t", "Error", $fetch, $error)."\n";
-      print STDERR "Sleeping for 15, maybe NCBI is down\n";
-      sleep(15);
+      print STDERR "Sleeping for 30, maybe NCBI is down\n";
+      sleep(30);
       $reTry = 1;
     };
     if ($reTry) {
       $iTry++;
-      if ($iTry >= 10) {
+      if ($iTry >= 100) {
         print STDERR join("\t", "Error", $fetch, "too many retries!")."\n";
         last;
       }
