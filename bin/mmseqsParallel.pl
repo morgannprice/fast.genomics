@@ -75,7 +75,7 @@ die "Invalid limit\n" unless $limit > 0;
 $nMaxAlign = $limit * $nAlignFactor if !defined $nMaxAlign;
 die "Invalid max-align\n" unless $nMaxAlign > 0;
 
-my $tmpDir = ($ENV{TMPDIR} || "/tmp") . "/mmseqsParallel.$$";
+my $tmpDir = ($ENV{TMPDIR} || "$RealBin/../tmp") . "/mmseqsParallel.$$";
 mkdir($tmpDir) || die "Cannot mkdir $tmpDir\n";
 
 $logFile = "$tmpDir/log" if !defined $logFile;

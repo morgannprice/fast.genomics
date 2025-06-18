@@ -174,7 +174,7 @@ sub saveMMSeqsHits($) {
   my $hitsFile = hitsFile($seq);
   die "No such file: $mmseqsDb" unless -e $mmseqsDb;
 
-  my $faaFile = "/tmp/neighborWeb.$$.faa";
+  my $faaFile = "../tmp/neighborWeb.$$.faa";
   open(my $fhFaa, ">", $faaFile) || die "Cannot write to $faaFile";
   print $fhFaa ">query\n$seq\n";
   close($fhFaa) || die "Error writing to $faaFile";
@@ -835,7 +835,7 @@ sub geneHitsToProteinAlignment {
     my $muscle = "../bin/muscle3";
     die "No such executable: $muscle\n" unless -x $muscle;
     my $tmpFile = "$alnFile.$$.tmp";
-    my $faaFile = "/tmp/neighborWeb.$$.faa";
+    my $faaFile = "../tmp/neighborWeb.$$.faa";
     open(my $fhFaa, ">", $faaFile) || die "Cannot write to $faaFile";
     foreach my $protSpec (@protSpec) {
       my ($proteinId, $sBegin, $sEnd) = split /___/, $protSpec;
@@ -899,7 +899,7 @@ sub geneHitsToTree {
     my $fastTree = "../bin/FastTree";
     die "No such executable: $fastTree\n" unless -x $fastTree;
     geneHitsToProteinAlignment($genes);
-    my $alnFile = "/tmp/neighborWeb.$$.aln";
+    my $alnFile = "../tmp/neighborWeb.$$.aln";
     open(my $fhAln, ">", $alnFile) || die "Cannot write to $alnFile\n";
     foreach my $gene (@$genes) {
       print $fhAln ">" . $gene->{locusTag} . "\n" . $gene->{alignedSeq} . "\n";

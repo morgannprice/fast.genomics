@@ -2,7 +2,7 @@
 # Using LAST, find all similarities between a est of protein sequences
 # and cluster them
 # Assumes that the LAST executables lastal and lastdb are in $RealBin/../bin/
-# uses $ENV{TMPDIR} or /tmp as the temporary directory for the last database and hits
+# uses $ENV{TMPDIR} or $RealBin/../tmp as the temporary directory for the last database and hits
 package clusterProteins;
 require Exporter;
 use strict;
@@ -127,7 +127,7 @@ sub proteinsToSimilarity($$) {
   }
 
   my $md5 = md5_hex(join(",", sort keys %$proteinSeq));
-  my $tmpDir = $ENV{TMPDIR} || "/tmp";
+  my $tmpDir = $ENV{TMPDIR} || "$RealBin/../tmp";
   my $tmpPre = "$tmpDir/$md5.$$";
   my $tmpFaa = "$tmpPre.faa";
   open(my $fh, ">", $tmpFaa) || die "Cannot write to $tmpFaa";

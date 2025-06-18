@@ -4,6 +4,7 @@ package clusterBLASTp;
 require Exporter;
 use strict;
 use DBI;
+use FindBin qw{$RealBin};
 our (@ISA,@EXPORT);
 @ISA = qw(Exporter);
 @EXPORT = qw{cluster parseClustering expandByClusters clusteringIntoDb
@@ -14,7 +15,7 @@ our (@ISA,@EXPORT);
           };
 
 sub tmpPre() {
-  return ($ENV{TMPDIR} || "/tmp") . "/clusterBLASTp.$$";
+  return ($ENV{TMPDIR} || "$RealBin/../tmp") . "/clusterBLASTp.$$";
 }
 
 # Writes the reduced fasta to out and the clustering to out.clstr
