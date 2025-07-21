@@ -661,6 +661,7 @@ foreach my $hit (@$geneHits) {
   $xMax = max($xMax, $genesSvg{xMax});
 }
 my %scaleBarSvg = scaleBarSvg('xLeft' => $genesLeft + ($xMax - $genesLeft) * 0.7,
+                              'kbWidth' => $kbWidth,
                               'yTop' => $yAt + 5);
 push @svgLines, $scaleBarSvg{svg};
 # Would be ~900; increase to make sure species name shows up in top level view on some browsers

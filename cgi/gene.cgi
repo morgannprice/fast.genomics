@@ -150,6 +150,7 @@ my %genesSvg = genesSvg(\@showGenes,
                         'scaffoldLength' => $scaffold->{length},
                         'showLabel' => 1);
 my %scaleBarSvg = scaleBarSvg('xLeft' => $genesSvg{xMax} * 0.8,
+                              'kbWidth' => $kbWidth,
                               'yTop' => $genesSvg{yMax} + 5);
 my $svgWidth = max($genesSvg{xMax}, $scaleBarSvg{xMax});
 my $svgHeight = $scaleBarSvg{yMax};
