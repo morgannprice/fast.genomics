@@ -152,6 +152,11 @@ if (exists $hit->{uniprotId}) {
   # no hits
 }
 
+print p("Or try the",
+        a({-href => "http://ekhidna2.biocenter.helsinki.fi/cgi-bin/sans/sans.cgi?query="
+           . uri_escape(">" . $query{seqDesc} . "\n" . $query{seq}) },
+          "SANSparallel server")), "\n";
+
 print p(a({-href => "bestHitUniprot.cgi"}, "Try another query"));
 
 print
