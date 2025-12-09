@@ -112,11 +112,9 @@ if ($format eq "") {
       $firstWord =~ s/^[a-zA-Z]+[|]//;
     }
     $firstWord =~ s/[| ].*//;
-    if ($firstWord =~ m/^[a-zA-Z0-9._-]+$/) {
-      $fileName .= $firstWord;
-    } else {
-      $fileName .= length($seq);
-    }
+    $firstWord =~ s/[^a-zA-Z0-9_.-]/_/g;
+    $fileName .= $firstWord;
+    $fileName .= "_" . length($seq);
   }
   $fileName .= "." . $format;
   if ($format eq "fasta") {
@@ -578,7 +576,7 @@ foreach my $hit (@$geneHits) {
     if (getOrder() eq "") {
       push @lineage, qq{<a xlink:href="$genomeURL"><title>strain $strainE</title><tspan font-size="85%">$speciesE</tspan></a>};
     } else {
-      my $speciesURL = addOrderToURL("taxon.cgi?level=species&taxon=".uri_escape($species));
+      my $speciesURL = encode_entities(addOrderToURL("taxon.cgi?level=species&taxon=".uri_escape($species)));
       push @lineage, qq[<a xlink:href="$speciesURL"><title>genus/species</title>$speciesE</a>];
       if (exists $hit->{genes} && exists $hit->{nGenomes}
           && scalar(@{ $hit->{genes} }) > 1) {
