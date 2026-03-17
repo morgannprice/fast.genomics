@@ -141,6 +141,13 @@ if (getOrder() eq "") {
 }
 print "\n";
 
+if ($level eq "genus" || $level eq "species") {
+  my $prefix = substr($level, 0, 1);
+  my $URL = "https://sandpiper.qut.edu.au/taxonomy/${prefix}__" . uri_escape($taxon);
+  print p("See", a({-href => $URL, -title => "Sandpiper"},
+                   "prevalence in metagenomes"));
+}
+
 print p(start_form(-name => 'input', -method => 'GET', -action => 'findTaxon.cgi'),
         orderToHidden(),
         "Find another taxon:",
