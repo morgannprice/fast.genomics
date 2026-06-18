@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 use strict;
+use DBI;
 use Getopt::Long;
 use FindBin qw{$RealBin};
 use lib "$RealBin/../lib";
@@ -30,10 +31,12 @@ More arguments (optional):
 -minCoverage $minCoverage -- minimum alignment coverage (both ways)
   for the cluster seed and the sequence
 -minIdentity $minIdentity -- minimum fractional identity to cluster
+-restart -- if a subdirectory already has the key files, assume it
+  has been built already (sub.db, sub.faa.gz, cluster.faa.gz)
 END
 ;
 
-my ($genomeFile, $fetchedFile, $inDir, $outDir);
+my ($genomeFile, $fetchedFile, $inDir, $outDir, $restart);
 die $usage
   unless GetOptions('genomes=s' => \$genomeFile,
                     'fetched=s' => \$fetchedFile,
@@ -41,7 +44,8 @@ die $usage
                     'out=s' => \$outDir,
                     'nCPUs=i' => \$nCPUs,
                     'minCoverage=f' => \$minCoverage,
-                    'minIdentity=f' => \$minIdentity)
+                    'minIdentity=f' => \$minIdentity,
+                    'restart' => \$restart)
   && defined $genomeFile
   && defined $inDir
   && defined $outDir
@@ -92,6 +96,19 @@ foreach my $order (sort keys %orderToGenomes) {
     mkdir($orderDir) || die "mkdir $orderDir failed: $!\n";
   }
 
+  my $proteinFaa = "$orderDir/sub.faa";
+  my $clusterPre = "$orderDir/cluster.faa";
+  my $dbFile = "$orderDir/sub.db";
+  if (defined $restart && -e "$proteinFaa.gz" && -e "$clusterPre.gz" && -e $dbFile) {
+    print STDERR "Skipping $order -- already built\n";
+    my $dbh = DBI->connect("dbi:SQLite:dbname=$dbFile","","",{ RaiseError => 1 }) || die $DBI::errstr;
+    my $row = $dbh->selectrow_hashref("SELECT * from ClusteringInfo");
+    my ($nGenomes) = $dbh->selectrow_array("SELECT COUNT(*) from Genome");
+    print $fhTab join("\t", $order, "order", orderToSubName($order),
+                      $nGenomes, $row->{nProteins}, $row->{nClusters})."\n";
+    next;
+  }
+
   # Run build.pl in test mode -- this will make the subdb and the fasta file
   my $tmp = $ENV{TMPDIR} || "/tmp";
   my $tmpPre = "$tmp/buildSubDbs.$$";
@@ -115,9 +132,7 @@ foreach my $order (sort keys %orderToGenomes) {
 
 
   die unless -e "$orderDir/neighbor.faa";
-  my $proteinFaa = "$orderDir/sub.faa";
   rename("$orderDir/neighbor.faa", $proteinFaa) || die "Rename to $proteinFaa failed";
-  my $clusterPre = "$orderDir/cluster.faa";
   print STDERR "Clustering $order\n";
   my $clusters = cluster('cdhit' => $cdhit, 'faa' => $proteinFaa, 'out' => $clusterPre,
                          'minIdentity' => $minIdentity, 'minCoverage' => $minCoverage,
@@ -138,8 +153,7 @@ foreach my $order (sort keys %orderToGenomes) {
   formatBLASTp($exeDir, $clusterPre, 1 ); # 1 for use BLAST+
 
   # Build the sql database
-  print STDERR "Building the sqlite3 database $orderDir/sub.db\n";
-  my $dbFile = "$orderDir/sub.db";
+  print STDERR "Building the sqlite3 database $dbFile\n";
   unlink($dbFile); # no old data
   my $sqlFile = "$RealBin/../lib/neighbor.sql";
   system("sqlite3 $dbFile < $sqlFile") == 0 || die $!;
