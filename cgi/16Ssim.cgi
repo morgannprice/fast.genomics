@@ -13,7 +13,7 @@ use neighbor;
 # neighborWeb.pm relies on various PaperBLAST libraries
 use lib "../../PaperBLAST/lib";
 use neighborWeb;
-use pbweb qw{commify};
+use pbweb qw{commify checkHighLoad};
 
 # Optional CGI arguments:
 # query -- raw sequence, or fasta, or a 16S locusTag that is in the All16S table
@@ -124,6 +124,8 @@ my $tmpHits = "$tmpPre.hits";
 open(my $fh, ">", $tmpFna) || die "Cannot write to $tmpFna";
 print $fh ">query\n$seq\n";
 close($fh) || die "Error writing to $tmpFna";
+
+checkHighLoad($cgi); # may ask for user confirmation or wait
 
 my $cmd = "$usearch -usearch_local $tmpFna -db $udb -id $minIdentity -mincols $minAln -strand both"
   . " -maxaccepts $maxHits -maxrejects $maxHits -blast6out $tmpHits -quiet --threads 1";

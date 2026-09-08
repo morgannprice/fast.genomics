@@ -14,11 +14,14 @@ use List::Util qw{max};
 # from the PaperBLAST code base
 use pbweb qw{GetMotd commify
              VIMSSToFasta RefSeqToFasta UniProtToFasta FBrowseToFasta pdbToFasta
-             runTimerHTML runWhileCommenting doWhileCommenting};
+             runTimerHTML runWhileCommenting doWhileCommenting checkHighLoad};
 use pbutils qw{NewerThan ReadFastaEntry};
 use neighbor;
 use clusterProteins;
 use clusterBLASTp;
+
+# number of CPUs to use for mmseqsParallel or clusteredBLASTp, unless load is high
+my $nCPUs = 10;
 
 our (@ISA,@EXPORT);
 @ISA = qw(Exporter);
@@ -141,6 +144,12 @@ sub hasHits($) {
 sub getHits($) {
   my ($seq) = @_;
   my $subDb = getSubDb();
+  my $hasHits = hasHits($seq);
+  # If load is *really* high, checkHighLoad() may ask for user confirmation or refuse to run
+  # If load is moderate, use just 1 CPU
+  if (! $hasHits && checkHighLoad($CGI::Q)) {
+    $nCPUs = 1;
+  }
   my $hitsFile = hitsFile($seq);
 
   print "\n<!-- hits file $hitsFile -->\n" unless $quietMode;
@@ -187,7 +196,7 @@ sub saveMMSeqsHits($) {
   #my $cmd = "../bin/searchSliced.pl -in $faaFile -sliced $mmseqsDb -out $tmpOut"
   #        . " -limit $nGenomes -db-load-mode 2 -s $mmseqsSens";
   my $cmd = "../bin/mmseqsParallel.pl -in $faaFile -db $mmseqsDb -out $tmpOut"
-    . " -limit $nGenomes -s $mmseqsSens -nCPU 10";
+    . " -limit $nGenomes -s $mmseqsSens -nCPU $nCPUs";
   if ($quietMode) {
     system($cmd) == 0 || die "Error running $cmd -- $!";
   } else {
@@ -223,7 +232,7 @@ sub computeSubDbHomologs($) {
                     'clusterDb' => $clusterDb,
                     'maxHits' => [$nMaxHits1,$nMaxHits2],
                     'dbh' => getSubDbHandle(),
-                    'nCPUs' => 12,
+                    'nCPUs' => $nCPUs,
                     'quiet' => $quietMode,
                     'dbSize' => $nAA,
                     'bin' => "../bin")
@@ -681,6 +690,9 @@ sub clusterGenes {
     }
     close($fh) || die "Error reading $clusterFile";
   } else {
+    if (checkHighLoad($CGI::Q)) {
+      clusterProteins::setCPUs(1);
+    }
     my %proteinSeq = ();
     print qq{<P id="ClusterInfo">Clustering the proteins for coloring...</P>}, "\n"
       unless $quietMode;
@@ -898,6 +910,7 @@ sub geneHitsToTree {
     }
     my $fastTree = "../bin/FastTree";
     die "No such executable: $fastTree\n" unless -x $fastTree;
+    checkHighLoad($CGI::Q); # give up if load is very high
     geneHitsToProteinAlignment($genes);
     my $alnFile = "../tmp/neighborWeb.$$.aln";
     open(my $fhAln, ">", $alnFile) || die "Cannot write to $alnFile\n";
