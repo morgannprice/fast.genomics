@@ -16,7 +16,15 @@ use pbweb qw{runWhileCommenting};
 
 our (@ISA,@EXPORT);
 @ISA = qw(Exporter);
-@EXPORT = qw(parseLast clusterProteins proteinsToSimilarity);
+@EXPORT = qw(parseLast clusterProteins proteinsToSimilarity setCPUs);
+
+my $nCPUs = 12;
+sub setCPUs($) {
+  my ($n) = @_;
+  chomp $n;
+  die unless $n =~ m/^\d+$/;
+  $nCPUs = $n;
+}
 
 # Given a file handle, returns a list of alignments, each containing
 # query, subject, qBegin, qEnd, qLength, sBegin, sEnd, sLength, bits, score, eValue,
@@ -139,7 +147,7 @@ sub proteinsToSimilarity($$) {
   my $cmd;
   $cmd = "$lastdb -p $tmpLast $tmpFaa";
   system($cmd) == 0 || die "$cmd -- failed: $!";
-  $cmd = "$lastal -P 12 -f BlastTab $tmpLast $tmpFaa > $tmpLast.out";
+  $cmd = "$lastal -P $nCPUs -f BlastTab $tmpLast $tmpFaa > $tmpLast.out";
   if (neighborWeb::getQuietMode()) {
     system($cmd) == 0 || die "$cmd -- failed: $!";
   } else {
