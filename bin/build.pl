@@ -10,6 +10,7 @@ use FetchAssembly qw{ParseNCBIFeatureFile};
 use pbutils qw{ReadFastaEntry ReadTable};
 
 my $kmerSize = 0; # kmer size for mmseqs index
+my $minNProteins = 200;
 my $usage = <<END
 build.pl -genomes genomes.tsv [ -fetched genomes.tsv.fetched ] -in indir -out outdir
 
@@ -29,6 +30,8 @@ More arguments (optional):
    or delete the tab-delimited tables, or compress the faa file
 -k $kmerSize -- kmer size for mmseqs index
   (0 means mmseqs chooses)
+-minNProteins $minNProteins -- skip genomes with #proteins
+  or #protein-coding genes less than this
 -quiet
 END
 ;
@@ -41,6 +44,7 @@ die $usage
                     'out=s' => \$outDir,
                     'test' => \$test,
                     'kmer=i' => \$kmerSize,
+                    'minNProteins=i' => \$minNProteins,
                     'quiet' => \$quiet)
   && defined $genomeFile
   && defined $inDir
@@ -121,26 +125,62 @@ foreach my $row (@genomes) {
   foreach my $gene (@$genes) {
     my $locusTag = $gene->{locusTag};
     if (exists $locusSeen{$locusTag}) {
-      print STDERR "Skipping genome $gid ($fetch) with locus $locusTag also seen in $locusSeen{$locusTag}\n";
+      print STDERR join("\t", "Skipping", $gid, "locus $locusTag is also seen in $locusSeen{$locusTag}")."\n";
       $keepGenome = 0;
       last;
     }
   }
   next unless $keepGenome;
 
+  # Read the protein sequences
+  my %aaseqNew = (); # only save the new sequences (not in a prior genome)
   open(my $fhIn, "<", $faaIn) || die "Cannot read $faaIn";
   my $state = {};
   while (my ($header,$seq) = ReadFastaEntry($fhIn, $state)) {
     $header =~ s/ .*//;
     my $proteinId = $header;
     next if exists $protSeen{$proteinId};
-    # If using a filehandle in a hash, need to enclode it in a block
-    print { $fh{Protein} } "$proteinId\t$seq\n";
-    print $fhFaaOut ">$proteinId\n$seq\n";
     $protSeen{$proteinId} = 1;
+    $aaseqNew{$proteinId} = $seq;
   }
   close($fhIn) || die "Error reading $faaIn";
 
+  # Verify that it has protein-coding genes, or else skip this genome
+  my $nGenes = scalar(@$genes);
+  my $nGenesWithProteins = 0;
+  foreach my $gene (@$genes) {
+    my $locusTag = $gene->{locusTag};
+    my $proteinId = $gene->{proteinId};
+    if ($proteinId ne "" & !exists $protSeen{$proteinId}) {
+      print STDERR join("\t", "Warning", $gid, "unknown protein $proteinId in feature file")."\n";
+      $proteinId = "";
+    }
+    $nGenesWithProteins++ if $proteinId ne "";
+  }
+  if ($nGenesWithProteins < $minNProteins) {
+    print STDERR join("\t", "Skipping", $gid, "Only $nGenesWithProteins genes with proteins") . "\n";
+    next;
+  }
+  if ($nGenesWithProteins <= $nGenes/2.0) {
+    print STDERR join("\t", "Skipping", $gid, "$nGenes genes but only $nGenesWithProteins with proteins") . "\n";
+    next;
+  }
+
+  foreach my $gene (@$genes) {
+    my $locusTag = $gene->{locusTag};
+    $locusSeen{$locusTag} = $gid;
+    my $proteinId = $gene->{proteinId};
+    $proteinId = "" if !exists $protSeen{$proteinId};
+    print { $fh{Gene} } join("\t", $gid,
+                             $gene->{scaffoldId}, $gene->{start}, $gene->{end}, $gene->{strand},
+                             $locusTag, $proteinId,
+                             csvQuote($gene->{desc})) . "\n";
+  }
+  foreach my $proteinId (sort keys %aaseqNew) {
+    my $seq = $aaseqNew{$proteinId};
+    print { $fh{Protein} } "$proteinId\t$seq\n";
+    print $fhFaaOut ">$proteinId\n$seq\n";
+  }
   open (my $fhFna, "<", $fnaFile) || die "Cannot read $fnaFile";
   $state = {};
   while (my ($header,$seq) = ReadFastaEntry($fhFna, $state)) {
@@ -154,27 +194,8 @@ foreach my $row (@genomes) {
   }
   close($fhFna) || die "Error reading $fnaFile";
 
-  my $nGenes = scalar(@$genes);
-  my $nGenesWithProteins = 0;
-  foreach my $gene (@$genes) {
-    my $locusTag = $gene->{locusTag};
-    $locusSeen{$locusTag} = $gid;
-    my $proteinId = $gene->{proteinId};
-    if ($proteinId ne "" & !exists $protSeen{$proteinId}) {
-      print STDERR join("\t", "Warning", $gid, "unknown protein $proteinId in feature file")."\n";
-      $proteinId = "";
-    }
-    print { $fh{Gene} } join("\t", $gid,
-                             $gene->{scaffoldId}, $gene->{start}, $gene->{end}, $gene->{strand},
-                             $locusTag, $proteinId,
-                             csvQuote($gene->{desc})) . "\n";
-    $nGenesWithProteins++ if $proteinId ne "";
-  }
-  print STDERR "Warning\t$gid\t$nGenes genes but only $nGenesWithProteins with protein sequences !\n"
-    if $nGenesWithProteins <= $nGenes/2.0;
-
-  # Fields in the Genome table are gid
-  # gtdbDomain Phylum Class Order Family Genus Species
+  # Fields in the Genome table are gid,
+  # gtdbDomain Phylum Class Order Family Genus Species,
   # strain gtdbAccession assemblyName ncbiTaxonomy
   my $gtdbTax = parseTaxString($row->{gtdb_taxonomy});
   if (!defined $gtdbTax) {
