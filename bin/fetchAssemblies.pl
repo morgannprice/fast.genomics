@@ -25,12 +25,14 @@ protein annotations) are omitted from the fetched table.
 Optional arguments:
 -keyFile NCBI.api_key
 -outTable genomes.tsv.fetched
+-refseq -- try to fetch the refseq version (GCF_) instead of the genbank version (GCA_), if possible
 END
 ;
 
-my ($tableFile, $outTable, $dir, $keyFile);
+my ($tableFile, $outTable, $dir, $keyFile, $refseq);
 die $usage
   unless GetOptions('table=s' => \$tableFile, 'dir=s' => \$dir, 'outTable=s' => \$outTable,
+                    'refseq' => \$refseq,
                    'keyFile=s' => \$keyFile)
   && @ARGV == 0
   && defined $tableFile && defined $dir;
@@ -67,26 +69,30 @@ foreach my $row (@rows) {
   my $fetch = $row->{fetch};
   my $assembly;
   my $iTry = 0;
-  for(;;) {
-    my $reTry = 0;
+  while(! defined $assembly) {
+    if ($fetch =~ m/^GCA/ && defined $refseq) {
+      my $fetch2 = $fetch; $fetch2 =~ s/^GCA/GCF/;
+      eval {
+        $assembly = CacheAssembly("NCBI", $fetch2, $dir);
+        1;
+      }
+    }
     eval {
-      $assembly = CacheAssembly("NCBI", $fetch, $dir);
+      $assembly = CacheAssembly("NCBI", $fetch, $dir) unless $assembly;
       1;
     } or do {
       my $error = $@;
       print STDERR join("\t", "Error", $fetch, $error)."\n";
-      print STDERR "Sleeping for 30, maybe NCBI is down\n";
-      sleep(30);
-      $reTry = 1;
     };
-    if ($reTry) {
+    if (!defined $assembly) {
       $iTry++;
       if ($iTry >= 100) {
         print STDERR join("\t", "Error", $fetch, "too many retries!")."\n";
         last;
+      } else {
+        print STDERR "Sleeping for 30, maybe NCBI is down\n";
+        sleep 30;
       }
-    } else {
-      last;
     }
   }
   if (defined $assembly) {
